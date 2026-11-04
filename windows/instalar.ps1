@@ -128,7 +128,13 @@ else {
 
 # ---------- 3. iCloud (web de Apple) ----------
 Paso 'iCloud'
-if (StoreApp '*AppleInc.iCloud*') { Aviso 'Tiene iCloud de Microsoft Store: desinstalelo desde Configuracion > Aplicaciones y vuelva a ejecutar.'; $fallos += 'iCloud (Store)' }
+# El instalador de Apple solo acepta Windows de escritorio (MsiNTProductType = 1), no Windows Server.
+$esServidor = (Get-CimInstance Win32_OperatingSystem).ProductType -ne 1
+if ($esServidor) {
+    Aviso 'Windows Server: iCloud no se instala aqui (Apple solo lo permite en Windows 10/11 de escritorio).'
+    if (-not $CI) { $fallos += 'iCloud (Windows Server no compatible)' }
+}
+elseif (StoreApp '*AppleInc.iCloud*') { Aviso 'Tiene iCloud de Microsoft Store: desinstalelo desde Configuracion > Aplicaciones y vuelva a ejecutar.'; $fallos += 'iCloud (Store)' }
 elseif (Instalado 'iCloud*') { Ok 'Ya estaba instalado' }
 else {
     $exe = Descargar 'https://updates.cdn-apple.com/2020/windows/001-39935-20200911-1A70AA56-F448-11EA-8CC0-99D41950005E/iCloudSetup.exe' 'iCloudSetup.exe'

@@ -20,20 +20,7 @@ jobs:
           [IO.File]::WriteAllBytes("$PWD\windows\Jarvis.ipa", (New-Object byte[] 2048))
           winget --version
           powershell -NoProfile -ExecutionPolicy Bypass -File windows\instalar.ps1 -CI *>&1 | Tee-Object -FilePath win.log
-          $code = $LASTEXITCODE
-          "--- condiciones de iCloud64.msi ---" | Tee-Object -FilePath win.log -Append
-          $msi = Get-ChildItem "$env:TEMP\JarvisInstalador" -Filter iCloud64.msi -Recurse | Select-Object -First 1
-          if ($msi) {
-            $inst = New-Object -ComObject WindowsInstaller.Installer
-            $db = $inst.GetType().InvokeMember('OpenDatabase','InvokeMethod',$null,$inst,@($msi.FullName,0))
-            $v = $db.GetType().InvokeMember('OpenView','InvokeMethod',$null,$db,@('SELECT `Condition`,`Description` FROM `LaunchCondition`'))
-            $v.GetType().InvokeMember('Execute','InvokeMethod',$null,$v,$null)
-            while ($r = $v.GetType().InvokeMember('Fetch','InvokeMethod',$null,$v,$null)) {
-              ("COND: " + $r.GetType().InvokeMember('StringData','GetProperty',$null,$r,1) + "  =>  " + $r.GetType().InvokeMember('StringData','GetProperty',$null,$r,2)) | Tee-Object -FilePath win.log -Append
-            }
-          }
-          ("SO: " + (Get-CimInstance Win32_OperatingSystem).Caption + " ProductType=" + (Get-CimInstance Win32_OperatingSystem).ProductType) | Tee-Object -FilePath win.log -Append
-          exit $code
+          exit $LASTEXITCODE
       - name: Publicar informe
         if: always()
         shell: bash
