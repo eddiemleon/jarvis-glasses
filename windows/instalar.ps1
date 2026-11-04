@@ -88,9 +88,16 @@ function InstalarApple($exe, $patron) {
         return (Instalado $patron)
     }
     $orden = { switch -Wildcard ($_.Name) { 'AppleApplicationSupport*' { 0 } 'AppleMobileDeviceSupport*' { 1 } 'Bonjour*' { 2 } 'AppleSoftwareUpdate*' { 3 } default { 9 } } }
+    $nombres = $msis | ForEach-Object Name
     foreach ($m in ($msis | Sort-Object $orden, Name)) {
-        $p = Start-Process msiexec.exe -ArgumentList "/i `"$($m.FullName)`" /qn /norestart" -Wait -PassThru
+        $base = [IO.Path]::GetFileNameWithoutExtension($m.Name)
+        if ([Environment]::Is64BitOperatingSystem -and $base -ne 'AppleApplicationSupport' -and ($nombres -contains "${base}64.msi")) { continue }
+        $mlog = Join-Path $Work "$base.log"
+        $p = Start-Process msiexec.exe -ArgumentList "/i `"$($m.FullName)`" /qn /norestart /l*v `"$mlog`"" -Wait -PassThru
         Write-Host "    $($m.Name): codigo $($p.ExitCode)"
+        if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010 -and (Test-Path $mlog)) {
+            Get-Content $mlog -ErrorAction SilentlyContinue | Select-String -Pattern 'Return value 3|error|LaunchCondition|requires|Windows' -SimpleMatch:$false | Select-Object -Last 12 | ForEach-Object { Write-Host "      log: $($_.Line.Trim())" }
+        }
     }
     return (Instalado $patron)
 }
@@ -130,18 +137,18 @@ else {
 
 # ---------- 4. Sideloadly ----------
 Paso 'Sideloadly'
-if (Instalado 'Sideloadly*') { Ok 'Ya estaba instalado' }
+if ((Instalado 'Sideloadly*') -or (BuscarSideloadly)) { Ok 'Ya estaba instalado' }
 else {
     if (Winget) {
         winget install -e --id iOSGods.Sideloadly --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
         Write-Host "    winget Sideloadly: codigo $LASTEXITCODE"
     }
-    if (-not (Instalado 'Sideloadly*')) {
+    if (-not ((Instalado 'Sideloadly*') -or (BuscarSideloadly))) {
         $exe = Descargar 'https://sideloadly.io/SideloadlySetup64.exe' 'SideloadlySetup64.exe'
         $p = Start-Process $exe -ArgumentList '/S' -Wait -PassThru
         Write-Host "    instalador Sideloadly: codigo $($p.ExitCode)"
     }
-    if (Instalado 'Sideloadly*') { Ok 'Instalado' }
+    if ((Instalado 'Sideloadly*') -or (BuscarSideloadly)) { Ok 'Instalado' }
     else { $fallos += 'Sideloadly'; if (-not $CI) { Aviso 'Descarguelo de sideloadly.io (se abre ahora).'; Start-Process 'https://sideloadly.io' } }
 }
 
