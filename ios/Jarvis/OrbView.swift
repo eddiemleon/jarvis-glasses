@@ -38,7 +38,7 @@ struct OrbView: View {
     }
 
     var body: some View {
-        TimelineView(.animation) { tl in
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { tl in // 30 cuadros/s: fluido y liviano
             Canvas { ctx, size in
                 let t = tl.date.timeIntervalSinceReferenceDate
                 let c = CGPoint(x: size.width / 2, y: size.height / 2)
