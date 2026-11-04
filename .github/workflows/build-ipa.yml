@@ -14,7 +14,7 @@ permissions:
   contents: write
 jobs:
   build:
-    runs-on: macos-26
+    runs-on: macos-26-intel   # las Mac arm64 de GitHub estaban sin capacidad
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
