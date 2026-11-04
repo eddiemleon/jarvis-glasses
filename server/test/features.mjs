@@ -179,6 +179,19 @@ const B = start(18084, DIR_B);
 await sleep(1000);
 
 try {
+  console.log('Una sola conexión (respuestas no se repiten)');
+  const dup1 = client(18083); await dup1.open; dup1.send({ type: 'hello', token: TOKEN }); await dup1.wait((m) => m.type === 'ready');
+  const dup2 = client(18083); await dup2.open; dup2.send({ type: 'hello', token: TOKEN }); await dup2.wait((m) => m.type === 'ready');
+  await sleep(300);
+  assert.equal(dup1.ws.readyState, 3, 'la conexión vieja debe cerrarse');
+  ok('al reconectar, la conexión vieja se cierra');
+  const said1 = await turn(dup2, 'd1', 'hola');
+  assert.equal(dup2.inbox.filter((m) => m.type === 'say').length + said1.split('ok.').length - 2, 0);
+  assert.equal(said1, 'ok.');
+  ok('la respuesta llega una sola vez');
+  dup2.ws.close();
+  await sleep(200);
+
   console.log('Memoria visual + modelo económico');
   const c = client(18083);
   await c.open;
