@@ -13,6 +13,7 @@ final class GlassesVoice {
     private var tokens = ListenerTokenBag()
 
     func start() {
+        guard WearablesBoot.ready else { return } // sin SDK no hay "Hey Meta, abre Jarvis"
         loop?.cancel()
         loop = Task { [weak self] in
             var delay: UInt64 = 500_000_000

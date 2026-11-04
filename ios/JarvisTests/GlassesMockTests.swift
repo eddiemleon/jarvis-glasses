@@ -13,7 +13,9 @@ final class GlassesMockTests: XCTestCase {
     private var glasses: (any MockGlasses)?
 
     override func setUp() async throws {
-        try? Wearables.configure()
+        try await super.setUp()
+        WearablesBoot.start()
+        XCTAssertTrue(WearablesBoot.ready, "El SDK de Meta no arrancó: \(WearablesBoot.failure ?? "")")
         MockDeviceKit.shared.enable(config: MockDeviceKitConfig(initiallyRegistered: true, initialPermissionsGranted: true))
         let g = try MockDeviceKit.shared.pairGlasses(model: .rayBanMeta)
         g.powerOn()
@@ -29,6 +31,7 @@ final class GlassesMockTests: XCTestCase {
     override func tearDown() async throws {
         await MockDeviceKit.shared.disable()
         glasses = nil
+        try await super.tearDown()
     }
 
     /// Imagen de prueba (colores) guardada como JPEG temporal.

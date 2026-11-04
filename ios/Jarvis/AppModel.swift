@@ -70,6 +70,7 @@ final class AppModel: ObservableObject {
             return
         }
         wire()
+        if let f = WearablesBoot.failure { errorText = f }
         location.start()
         glasses.startObserving()
         voice.start()

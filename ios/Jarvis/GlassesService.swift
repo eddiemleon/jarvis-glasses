@@ -3,10 +3,31 @@ import UIKit
 import MWDATCore
 import MWDATCamera
 
+/// Arranque único del SDK de Meta. Si falla, la app NO se cierra: las funciones de las gafas
+/// quedan desactivadas con un aviso, y todo lo demás (voz, servidor, GPS, alertas) sigue funcionando.
+enum WearablesBoot {
+    private(set) static var ready = false
+    private(set) static var failure: String?
+
+    static func start() {
+        guard !ready else { return }
+        do {
+            try Wearables.configure()
+            ready = true
+        } catch let e as WearablesError where e == .alreadyConfigured {
+            ready = true
+        } catch {
+            failure = "El kit de Meta no arrancó (\(error)). Reinstale la app con Sideloadly usando su Apple ID."
+            print("Wearables.configure falló: \(error)")
+        }
+    }
+}
+
 enum GlassesError: LocalizedError {
-    case permission, noSession, noCamera, timeout, noFrame
+    case permission, noSession, noCamera, timeout, noFrame, sdkUnavailable
     var errorDescription: String? {
         switch self {
+        case .sdkUnavailable: return WearablesBoot.failure ?? "El kit de Meta no está disponible." 
         case .permission: return "Sin permiso de cámara en las gafas (concédelo en la app Meta AI)."
         case .noSession: return "No pude abrir sesión con las gafas. ¿Están puestas y conectadas?"
         case .noCamera: return "No pude activar la cámara de las gafas."
@@ -34,14 +55,25 @@ final class GlassesService: ObservableObject {
 
     private var session: DeviceSession?
     private var idleStop: Task<Void, Never>?
-    private let selector: AutoDeviceSelector
+    private var selectorStore: AutoDeviceSelector?
     private var observers: [Task<Void, Never>] = []
 
-    init() {
-        selector = AutoDeviceSelector(wearables: Wearables.shared)
+    init() {}
+
+    /// Se crea solo cuando el SDK está listo (antes, tocar Wearables.shared cerraba la app).
+    private func sdkSelector() throws -> AutoDeviceSelector {
+        guard WearablesBoot.ready else { throw GlassesError.sdkUnavailable }
+        if let s = selectorStore { return s }
+        let s = AutoDeviceSelector(wearables: Wearables.shared)
+        selectorStore = s
+        return s
     }
 
     func startObserving() {
+        guard let selector = try? sdkSelector() else {
+            registrationText = WearablesBoot.failure ?? "Kit de Meta no disponible"
+            return
+        }
         observers.forEach { $0.cancel() }
         observers = [
             Task { [weak self] in
@@ -53,7 +85,7 @@ final class GlassesService: ObservableObject {
             },
             Task { [weak self] in
                 guard let self else { return }
-                for await id in self.selector.activeDeviceStream() {
+                for await id in selector.activeDeviceStream() {
                     self.deviceConnected = (id != nil)
                 }
             },
@@ -73,6 +105,7 @@ final class GlassesService: ObservableObject {
     // MARK: Registro y permisos (abren la app Meta AI y vuelven por el esquema jarvisglasses://)
 
     func register() async -> String? {
+        guard WearablesBoot.ready else { return GlassesError.sdkUnavailable.errorDescription }
         do { try await Wearables.shared.startRegistration(); return nil }
         catch { return error.localizedDescription }
     }
@@ -80,11 +113,13 @@ final class GlassesService: ObservableObject {
     func handle(url: URL) async -> String? {
         guard let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
               comps.queryItems?.contains(where: { $0.name == "metaWearablesAction" }) == true else { return nil }
+        guard WearablesBoot.ready else { return GlassesError.sdkUnavailable.errorDescription }
         do { _ = try await Wearables.shared.handleUrl(url); return nil }
         catch { return error.localizedDescription }
     }
 
     func requestCameraPermission() async -> String? {
+        guard WearablesBoot.ready else { return GlassesError.sdkUnavailable.errorDescription }
         do {
             if try await Wearables.shared.checkPermissionStatus(.camera) == .granted { return nil }
             return try await Wearables.shared.requestPermission(.camera) == .granted ? nil : "Permiso de cámara denegado"
@@ -274,7 +309,7 @@ final class GlassesService: ObservableObject {
         if let s = session, s.state == .started { return s }
         session?.stop()
         session = nil
-        let s = try Wearables.shared.createSession(deviceSelector: selector)
+        let s = try Wearables.shared.createSession(deviceSelector: try sdkSelector())
         try s.start()
         let ok: Bool = await withTaskGroup(of: Bool.self) { group in
             group.addTask { for await st in s.stateStream() { if st == .started { return true }; if st == .stopped { return false } }; return false }

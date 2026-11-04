@@ -57,7 +57,7 @@ jobs:
           SIM=$(xcrun simctl list devices available | grep -E "iPhone 1[5-9]|iPhone 2" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
           echo "Simulador: $SIM"
           xcodebuild test -project Jarvis.xcodeproj -scheme Jarvis -destination "id=$SIM" \
-            -derivedDataPath build-test CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log
+            -derivedDataPath build-test CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO 2>&1 | tee test.log
       - name: Publicar informe de compilación y pruebas
         if: always()
         working-directory: ios

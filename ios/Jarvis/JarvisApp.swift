@@ -7,7 +7,7 @@ struct JarvisApp: App {
     @Environment(\.scenePhase) private var phase
 
     init() {
-        do { try Wearables.configure() } catch { print("Wearables.configure falló: \(error)") }
+        WearablesBoot.start()
     }
 
     var body: some Scene {
