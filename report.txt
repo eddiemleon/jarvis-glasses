@@ -1,0 +1,149 @@
+OS: Microsoft Windows Server 2025 Datacenter
+Sideloadly bytes: 144153593
+Firma: NotSigned / 
+contiene: Nullsoft
+contiene: NSIS
+contiene: WiX
+--- winget show Sideloadly
+
+   - 
+                                                                                                                        
+
+  ████████▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  1024 KB / 3.70 MB
+  ████████████████▒▒▒▒▒▒▒▒▒▒▒▒▒▒  2.00 MB / 3.70 MB
+  ████████████████████████▒▒▒▒▒▒  3.00 MB / 3.70 MB
+  ██████████████████████████████  3.70 MB / 3.70 MB
+                                                                                                                        
+
+  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  0%
+  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  0%
+  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  1%
+  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  2%
+  ██████████████████████▒▒▒▒▒▒▒▒  75%
+  █████████████████████████▒▒▒▒▒  84%
+  ███████████████████████████▒▒▒  92%
+  ███████████████████████████▒▒▒  92%
+  ██████████████████████████████  100%
+                                                                                                                        
+The `msstore` source requires that you view the following agreements before using.
+Terms of Transaction: https://aka.ms/microsoft-store-terms-of-transaction
+The source requires the current machine's 2-letter geographic region to be sent to the backend service to function properly (ex. "US").
+
+Found Sideloadly [iOSGods.Sideloadly]
+Version: 0.60.0
+Publisher: iOSGods
+Publisher Url: https://sideloadly.io/
+Publisher Support Url: https://sideloadly.io/#faq
+Description: The new & best way to sideload your favorite games and apps to your Non-Jailbroken iOS device, or Apple Silicon Mac!
+Homepage: https://sideloadly.io/#download
+License: Proprietary
+Privacy Url: https://sideloadly.io/privacy.html
+Release Notes:
+  - Faster IPA processing, signing, and uploading: We’ve made speed improvements to
+    make the sideloading process faster than ever!
+  - App ID tracking: Sideloadly will now display the number of available (weekly)
+    App IDs remaining for each Apple ID.
+  - Progress indicators: Signing, uploading, and installing progress will now be shown in percentages.
+  - Automatic retries: Sideloadly will automatically retry up to four times on
+    failed attempts, then prompt the user to continue if issue persists.
+  - App refresh display: Now, you can see which app was refreshed on which device.
+  - Resolved an issue where certain IPAs failed to install due to multiple PlugIns
+    and Extensions.
+  - Fixed the recurring LOCKDOWN_E_MUX error that appeared if an IPA took too long
+    to process.
+  - Corrected a verification code popup issue.
+  - Fixed a crash issue on older versions of macOS (requires reinstalling
+    Sideloadly to resolve).
+  - Improved installation logs for greater clarity.
+  - Various other bug fixes and improvements.
+Release Notes Url: https://sideloadly.io/#changelog
+Installer:
+  Installer Type: nullsoft
+  Installer Locale: en-US
+  Installer Url: https://sideloadly.io/SideloadlySetup64.exe
+  Installer SHA256: 625ad1e8240ee4765d0d181a33acab686b5b92f842e625c0f17e812a7893fdf4
+  Release Date: 2025-02-04
+  Offline Distribution Supported: true
+
+--- winget show iCloud
+
+   - 
+                                                                                                                        
+Found iCloud (Legacy) [Apple.iCloud]
+Version: 7.21.0.23
+Publisher: Apple Inc.
+Publisher Url: https://www.apple.com/
+Publisher Support Url: https://support.apple.com/guide/icloud-windows/
+Author: Apple Inc.
+Description: After you set up iCloud on an iPhone, iPad, iPod touch or Mac, you can use iCloud for Windows to access your photos, videos, calendar, files and other important information on your Windows PC. Your information stays up to date on all your devices.
+Homepage: https://support.apple.com/103232
+License: Proprietary
+License Url: https://www.apple.com/legal/sla/docs/iCloudForWindows.pdf
+Privacy Url: https://www.apple.com/legal/privacy/
+Copyright: © 2024 Apple Inc. All rights reserved.
+Copyright Url: https://www.apple.com/legal/intellectual-property/
+Release Notes: This update improves the security of iCloud for Windows, and is recommended for all users.
+Tags:
+  album
+  backup
+  cloud
+  cloud-drive
+  download
+  drive
+  file
+  ios
+  ipad
+  iphone
+  mobile
+  netdisk
+  phone
+  photo
+  sync
+  upload
+Installer:
+  Installer Type: exe
+  Installer Url: https://updates.cdn-apple.com/2020/windows/001-39935-20200911-1A70AA56-F448-11EA-8CC0-99D41950005E/iCloudSetup.exe
+  Installer SHA256: 4cfd20d13cdce2b5c435f2ddaf4ee4c81d976461846bf3b954e8af6cbcdeb9f7
+  Release Date: 2020-09-24
+  Offline Distribution Supported: true
+  Dependencies: 
+    - Package Dependencies: 
+        Apple.AppleApplicationSupport.x86
+        Apple.AppleApplicationSupport.x64
+        Apple.AppleSoftwareUpdate
+        Apple.Bonjour
+
+winget exit=-1978335226
+--- log winget (final)
+Property(S): ScreenX = 1024
+Property(S): ScreenY = 768
+Property(S): CaptionHeight = 23
+Property(S): BorderTop = 1
+Property(S): BorderSide = 1
+Property(S): TextHeight = 16
+Property(S): TextInternalLeading = 3
+Property(S): ColorBits = 32
+Property(S): TTCSupport = 1
+Property(S): Time = 12:35:12
+Property(S): Date = 11/4/2026
+Property(S): MsiNetAssemblySupport = 4.8.9221.0
+Property(S): MsiWin32AssemblySupport = 6.3.26100.33648
+Property(S): RedirectedDllSupport = 2
+Property(S): MsiRunningElevated = 1
+Property(S): DATABASE = C:\Windows\Installer\2721d.msi
+Property(S): OriginalDatabase = C:\Users\RUNNER~1\AppData\Local\Temp\IXP754.TMP\iCloud64.msi
+Property(S): UILevel = 2
+Property(S): ACTION = INSTALL
+Property(S): BUSEROSVERSION = 10
+MSI (s) (48:C4) [12:35:12:417]: Product: iCloud -- Installation failed.
+
+MSI (s) (48:C4) [12:35:12:419]: Windows Installer installed the product. Product Name: iCloud. Product Version: 7.21.0.23. Product Language: 1033. Manufacturer: Apple Inc.. Installation success or error status: 1603.
+
+=== Logging stopped: 11/4/2026  12:35:12 ===
+--- servicios Apple
+Bonjour Service | Bonjour Service | Running
+--- programas Apple
+Bonjour 3.1.0.1
+Apple Application Support (64-bit) 8.7
+Apple Software Update 2.6.3.1
+Apple Application Support (32-bit) 8.7
