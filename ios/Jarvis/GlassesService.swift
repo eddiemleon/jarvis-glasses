@@ -309,7 +309,19 @@ final class GlassesService: ObservableObject {
         if let s = session, s.state == .started { return s }
         session?.stop()
         session = nil
-        let s = try Wearables.shared.createSession(deviceSelector: try sdkSelector())
+        let selector = try sdkSelector()
+        // Espera a que el SDK vea unas gafas conectadas (Bluetooth aún enlazando, o recién encendidas).
+        if selector.activeDevice == nil {
+            let found: Bool = await withTaskGroup(of: Bool.self) { group in
+                group.addTask { for await id in selector.activeDeviceStream() { if id != nil { return true } }; return false }
+                group.addTask { try? await Task.sleep(nanoseconds: 8_000_000_000); return false }
+                let first = await group.next() ?? false
+                group.cancelAll()
+                return first
+            }
+            guard found else { throw GlassesError.noSession }
+        }
+        let s = try Wearables.shared.createSession(deviceSelector: selector)
         try s.start()
         let ok: Bool = await withTaskGroup(of: Bool.self) { group in
             group.addTask { for await st in s.stateStream() { if st == .started { return true }; if st == .stopped { return false } }; return false }

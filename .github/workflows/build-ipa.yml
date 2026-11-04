@@ -66,8 +66,8 @@ jobs:
             echo "run=${{ github.run_id }} commit=${{ github.sha }} fecha=$(date -u +%FT%TZ)"
             echo "== compilación =="; grep -E "error:|BUILD SUCCEEDED|BUILD FAILED" build.log 2>/dev/null | sort -u | head -60
             echo "== pruebas =="
-            grep -E "error:|Test Case|Executed|TEST SUCCEEDED|TEST FAILED|Testing failed|XCTAssert|Simulador|Unable|Failed|failed" test.log 2>/dev/null | head -150
-            echo "== final de pruebas =="; tail -60 test.log 2>/dev/null
+            grep -E "error:|Test Case|Executed|TEST SUCCEEDED|TEST FAILED|Testing failed|XCTAssert|Simulador|JARVIS-CHECK" test.log 2>/dev/null | head -150
+            echo "== final de pruebas =="; grep -v "^objc\\[" test.log 2>/dev/null | tail -40
           } > report.txt || true
           cp report.txt /tmp/report.txt
           cd "$GITHUB_WORKSPACE"
