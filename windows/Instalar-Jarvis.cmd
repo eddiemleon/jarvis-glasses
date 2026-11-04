@@ -42,8 +42,7 @@ Ok "winget disponible"
 # ---- 2. iTunes, iCloud (version clasica, la que pide Sideloadly) y Sideloadly ----
 $paquetes = @(
   @{ id = 'Apple.iTunes';       nombre = 'iTunes' },
-  @{ id = 'Apple.iCloud';       nombre = 'iCloud (version clasica)' },
-  @{ id = 'iOSGods.Sideloadly'; nombre = 'Sideloadly' }
+  @{ id = 'Apple.iCloud';       nombre = 'iCloud (version clasica)' }
 )
 $fallos = @()
 foreach ($p in $paquetes) {
@@ -55,15 +54,37 @@ foreach ($p in $paquetes) {
   if ($lista -match [regex]::Escape($p.id)) { Ok "$($p.nombre) instalado" } else { Mal "No pude confirmar $($p.nombre)"; $fallos += $p.nombre }
 }
 
-# ---- 3. Ubicar Sideloadly ----
-Paso "Buscando Sideloadly"
+# ---- 3. Sideloadly (desde su sitio oficial; su paquete de winget esta desactualizado) ----
 $inicio = @("$env:ProgramData\Microsoft\Windows\Start Menu\Programs", "$env:APPDATA\Microsoft\Windows\Start Menu\Programs")
-$sl = Get-ChildItem $inicio -Recurse -Filter 'Sideloadly*.lnk' -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $sl) {
-  $sl = Get-ChildItem "$env:ProgramFiles", "${env:ProgramFiles(x86)}", "$env:LOCALAPPDATA\Programs" -Recurse -Filter 'sideloadly*.exe' -ErrorAction SilentlyContinue -Depth 3 |
-        Where-Object { $_.Name -notmatch 'unins' } | Select-Object -First 1
+function BuscarSideloadly {
+  $x = Get-ChildItem $inicio -Recurse -Filter 'Sideloadly*.lnk' -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $x) {
+    $x = Get-ChildItem "$env:ProgramFiles", "${env:ProgramFiles(x86)}", "$env:LOCALAPPDATA\Programs" -Recurse -Filter 'sideloadly*.exe' -ErrorAction SilentlyContinue -Depth 3 |
+         Where-Object { $_.Name -notmatch 'unins|setup' } | Select-Object -First 1
+  }
+  return $x
 }
-if ($sl) { Ok "Sideloadly: $($sl.FullName)" } else { Mal "No encontre Sideloadly"; $fallos += 'Sideloadly (ubicacion)' }
+Paso "Instalando Sideloadly"
+$sl = BuscarSideloadly
+if ($sl) { Ok "Sideloadly ya estaba instalado" } else {
+  $setup = Join-Path $env:TEMP 'SideloadlySetup64.exe'
+  try {
+    Invoke-WebRequest 'https://sideloadly.io/SideloadlySetup64.exe' -OutFile $setup -UseBasicParsing
+    $firma = Get-AuthenticodeSignature $setup
+    Ok "Descargado ($([math]::Round((Get-Item $setup).Length/1MB,1)) MB). Firma digital: $($firma.Status)"
+    if ($firma.Status -ne 'Valid') {
+      Mal "La firma del instalador de Sideloadly no es valida: no lo ejecuto por seguridad."; $fallos += 'Sideloadly (firma)'
+    } elseif ($CI) {
+      Ok "Modo prueba: no se ejecuta el instalador grafico"
+    } else {
+      Write-Host "    Se abre el instalador de Sideloadly: pulse Siguiente / Instalar hasta terminar." -ForegroundColor White
+      Start-Process $setup -Wait
+      $sl = BuscarSideloadly
+    }
+  } catch { Mal "No pude descargar Sideloadly: $($_.Exception.Message)"; $fallos += 'Sideloadly (descarga)' }
+}
+Paso "Buscando Sideloadly"
+if ($sl) { Ok "Sideloadly: $($sl.FullName)" } elseif (-not $CI) { Mal "No encontre Sideloadly"; $fallos += 'Sideloadly (ubicacion)' }
 
 # ---- 4. App Jarvis (.ipa) ----
 Paso "Buscando la app Jarvis (Jarvis-unsigned.ipa)"

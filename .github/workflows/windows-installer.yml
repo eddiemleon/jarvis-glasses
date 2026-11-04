@@ -27,7 +27,7 @@ jobs:
         shell: pwsh
         run: |
           $r = @()
-          foreach ($id in 'Apple.iTunes','Apple.iCloud','iOSGods.Sideloadly') {
+          foreach ($id in 'Apple.iTunes','Apple.iCloud') {
             $o = winget list -e --id $id --accept-source-agreements | Out-String
             $r += "$id instalado=$($o -match [regex]::Escape($id))"
           }

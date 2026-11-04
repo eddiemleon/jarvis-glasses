@@ -3,11 +3,15 @@ on:
   workflow_dispatch:
   push:
     paths: ['.github/workflows/windows-diag.yml']
+concurrency:
+  group: win-diag
+  cancel-in-progress: true
 permissions:
   contents: write
 jobs:
   diag:
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - shell: pwsh
@@ -22,20 +26,8 @@ jobs:
           $o += "--- winget show Sideloadly"; $o += (winget show -e --id iOSGods.Sideloadly --accept-source-agreements | Out-String)
           $o += "--- winget show iCloud"; $o += (winget show -e --id Apple.iCloud --accept-source-agreements | Out-String)
           $o | Set-Content diag.txt
-      - name: Probar instalación silenciosa de Sideloadly
-        shell: pwsh
-        run: |
-          $o = @()
-          foreach ($args2 in @('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-', '/S')) {
-            $p = Start-Process $env:TEMP\sl.exe -ArgumentList $args2 -Wait -PassThru
-            $o += "args [$args2] exit=$($p.ExitCode)"
-            $lnk = Get-ChildItem "$env:ProgramData\Microsoft\Windows\Start Menu\Programs","$env:APPDATA\Microsoft\Windows\Start Menu\Programs" -Recurse -Filter 'Sideloadly*.lnk' -EA SilentlyContinue | % FullName
-            $exe = Get-ChildItem "$env:ProgramFiles","${env:ProgramFiles(x86)}","$env:LOCALAPPDATA" -Recurse -Filter 'sideloadly*.exe' -Depth 3 -EA SilentlyContinue | % FullName
-            $o += "  accesos: $($lnk -join ';')"; $o += "  exes: $($exe -join ';')"
-            if ($lnk -or $exe) { break }
-          }
-          $o | Add-Content diag.txt
       - name: Probar iCloud clásico
+        timeout-minutes: 10
         shell: pwsh
         run: |
           $o = @()

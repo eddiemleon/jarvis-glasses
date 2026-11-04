@@ -335,6 +335,14 @@ final class GlassesService: ObservableObject {
         return s
     }
 
+    /// Cierra cámara y sesión de inmediato (al salir, o entre pruebas).
+    func shutdown() {
+        stopStream()
+        idleStop?.cancel()
+        session?.stop()
+        session = nil
+    }
+
     private func scheduleIdleStop() {
         idleStop?.cancel()
         idleStop = Task { [weak self] in

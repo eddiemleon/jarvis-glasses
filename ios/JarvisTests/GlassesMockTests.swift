@@ -15,6 +15,14 @@ import MWDATMockDevice
 @MainActor
 final class GlassesMockTests: XCTestCase {
     private var glasses: (any MockGlasses)?
+    private var services: [GlassesService] = []
+
+    /// Cada prueba usa un GlassesService nuevo; al terminar se cierra su sesión para no dejar las gafas ocupadas.
+    private func makeService() -> GlassesService {
+        let s = GlassesService()
+        services.append(s)
+        return s
+    }
 
     override func setUp() async throws {
         try await super.setUp()
@@ -33,6 +41,9 @@ final class GlassesMockTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        services.forEach { $0.shutdown() }
+        services.removeAll()
+        try await Task.sleep(nanoseconds: 1_000_000_000)
         await MockDeviceKit.shared.disable()
         glasses = nil
         try await super.tearDown()
@@ -57,7 +68,7 @@ final class GlassesMockTests: XCTestCase {
 
     func test1_SDKStartsAndSeesGlasses() async throws {
         XCTAssertTrue(WearablesBoot.ready)
-        let service = GlassesService()
+        let service = makeService()
         service.startObserving()
         let deadline = Date().addingTimeInterval(10)
         while !service.deviceConnected, Date() < deadline { try await Task.sleep(nanoseconds: 200_000_000) }
@@ -66,7 +77,7 @@ final class GlassesMockTests: XCTestCase {
     }
 
     func test2_PhotoFlow() async throws {
-        let service = GlassesService()
+        let service = makeService()
         do {
             let data = try await service.captureJPEG()
             XCTAssertNotNil(UIImage(data: data), "La foto no es una imagen válida")
@@ -79,7 +90,7 @@ final class GlassesMockTests: XCTestCase {
     func test3_LiveStreamAllQualities() async throws {
         for quality in ["fluida", "equilibrada", "maxima"] {
             UserDefaults.standard.set(quality, forKey: K.liveQuality)
-            let service = GlassesService()
+            let service = makeService()
             let counter = FrameCounter()
             try await service.startStream { jpeg in counter.add(jpeg) } // OBLIGATORIO: no debe lanzar error
             XCTAssertTrue(service.isStreaming, "Calidad \(quality): la cámara no quedó transmitiendo")
@@ -87,6 +98,7 @@ final class GlassesMockTests: XCTestCase {
             while counter.count < 5, Date() < deadline { try await Task.sleep(nanoseconds: 200_000_000) }
             service.stopStream()
             XCTAssertFalse(service.isStreaming)
+            service.shutdown() // libera las gafas antes de probar la siguiente calidad
             if counter.count > 0 {
                 XCTAssertNotNil(counter.last.flatMap { UIImage(data: $0) }, "Calidad \(quality): cuadro inválido")
             }
@@ -96,7 +108,7 @@ final class GlassesMockTests: XCTestCase {
     }
 
     func test4_ViewThenLiveKeepsSameCamera() async throws {
-        let service = GlassesService()
+        let service = makeService()
         try await service.startStream { _ in }
         let counter = FrameCounter()
         try await service.startStream { jpeg in counter.add(jpeg) } // no debe abrir otra cámara ni fallar
@@ -107,7 +119,7 @@ final class GlassesMockTests: XCTestCase {
     }
 
     func test5_FullQualityPhoto() async throws {
-        let service = GlassesService()
+        let service = makeService()
         do {
             let data = try await service.captureFullPhoto()
             XCTAssertNotNil(UIImage(data: data), "La foto en máxima calidad no es una imagen válida")
