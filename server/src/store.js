@@ -11,7 +11,9 @@ try {
 }
 
 let timer = null;
+let onChange = null;
 function save() {
+  onChange?.();
   clearTimeout(timer);
   timer = setTimeout(() => {
     try {
@@ -28,6 +30,29 @@ function save() {
 const cap = (arr, n) => {
   while (arr.length > n) arr.shift();
 };
+
+// Copia de la memoria que se guarda en el iPhone (el plan gratis de Render borra el disco al dormirse).
+// No incluye fotos (pesan mucho); sí datos, recordatorios, rutinas, notas visuales y horarios.
+const SYNC_KEYS = ['facts', 'reminders', 'routines', 'visual', 'activity', 'alerts', 'wa'];
+export function snapshot() {
+  const out = {};
+  for (const k of SYNC_KEYS) out[k] = state[k];
+  out.savedAt = Date.now();
+  return out;
+}
+const isEmpty = () => !state.facts.length && !state.reminders.length && !state.routines.length && !(state.activity?.last > 0);
+// Restaura la copia del iPhone solo si este servidor arrancó vacío o la copia es más nueva.
+export function restore(snap) {
+  if (!snap || typeof snap !== 'object') return false;
+  if (!isEmpty() && !(snap.savedAt > (state.savedAt || 0))) return false;
+  for (const k of SYNC_KEYS) if (snap[k] !== undefined) state[k] = snap[k];
+  state.savedAt = snap.savedAt || Date.now();
+  save();
+  return true;
+}
+export function setOnChange(fn) {
+  onChange = fn;
+}
 
 export const store = {
   facts: () => state.facts,

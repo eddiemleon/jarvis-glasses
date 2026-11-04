@@ -3,8 +3,8 @@ import crypto from 'node:crypto';
 import { config, log } from './config.js';
 import { upgrade } from './ws.js';
 import { hub } from './hub.js';
-import { store } from './store.js';
-import { runTurn, cancelCurrent, runBackground } from './brain.js';
+import { store, snapshot, restore, setOnChange } from './store.js';
+import { runTurn, cancelCurrent, runBackground, historySnapshot, restoreHistory, onTurnDone } from './brain.js';
 import { verifySignature, parseIncoming, waEnabled } from './whatsapp.js';
 import { synthesize, ttsEnabled } from './tts.js';
 import { live, VIEWER_HTML, EXPIRED_HTML } from './live.js';
@@ -195,6 +195,12 @@ server.on('upgrade', (req, socket, head) => {
           // Una sola app a la vez: una conexión vieja que quedó abierta se cierra (evita respuestas repetidas).
           for (const old of [...hub.clients]) if (old !== conn) { hub.remove(old); old.close(4000); }
           hub.add(conn);
+          // Memoria guardada en el iPhone: si este servidor se reinició (plan gratis), la recupera.
+          if (m.restore && typeof m.restore === 'object') {
+            const okState = restore(m.restore.state);
+            restoreHistory(m.restore.history);
+            if (okState) log('memoria restaurada desde el iPhone');
+          }
           conn.send(
             JSON.stringify({
               type: 'ready',
@@ -252,13 +258,30 @@ server.on('upgrade', (req, socket, head) => {
       hub.remove(conn);
       log('app desconectada');
     });
+    // Latido: la red de Render no deja pasar los "ping" de WebSocket del iPhone, así que antes la app
+    // parecía muerta y se cortaba cada 60 s. Ahora el servidor envía un latido en texto (mantiene viva la
+    // conexión). Una conexión muerta se detecta cuando falla el envío; el corte por silencio queda en 30 min.
     const hb = setInterval(() => {
-      if (Date.now() - conn.lastSeen > 60_000) return conn.close(1001);
+      if (Date.now() - conn.lastSeen > 1_800_000) return conn.close(1001);
+      conn.send('{"type":"hb"}');
       conn.ping();
     }, 20_000);
     conn.on('close', () => clearInterval(hb));
   });
 });
+
+// Copia de la memoria hacia el iPhone tras cada conversación y cada cambio (con pausa para no saturar).
+let syncTimer = null;
+function scheduleSync() {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    if (!hub.connected) return;
+    const payload = JSON.stringify({ type: 'sync', state: snapshot(), history: historySnapshot() });
+    if (payload.length < 3_000_000) hub.send(JSON.parse(payload));
+  }, 1500);
+}
+setOnChange(scheduleSync);
+onTurnDone.fn = scheduleSync;
 
 startReminderLoop();
 await resolveBrains();

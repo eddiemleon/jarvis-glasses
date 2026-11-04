@@ -341,6 +341,10 @@ final class AppModel: ObservableObject {
     private func handleServer(_ m: [String: Any]) {
         guard let type = m["type"] as? String else { return }
         switch type {
+        case "sync":
+            link.saveMemory(m) // copia de la memoria de Jarvis en el iPhone
+        case "hb":
+            link.send(["type": "ping"]) // latido: confirma al servidor que la app sigue viva
         case "ready":
             serverModel = (m["model"] as? String) ?? ""
             if let f = m["features"] as? [String: Any] { speaker.remoteTTSAvailable = (f["tts"] as? Bool) ?? false }

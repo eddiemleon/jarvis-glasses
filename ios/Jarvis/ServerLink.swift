@@ -40,6 +40,28 @@ final class ServerLink {
     var onMessage: (([String: Any]) -> Void)?
     var onConnectionChanged: ((Bool) -> Void)?
 
+    // MARK: Memoria guardada en el iPhone
+    // El plan gratis de Render borra todo al dormirse; el servidor manda una copia ("sync") y la app
+    // se la devuelve en cada conexión ("restore"), así Jarvis nunca olvida.
+
+    private static var memoryFile: URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("jarvis-memoria.json")
+    }
+
+    func saveMemory(_ msg: [String: Any]) {
+        var copy = msg
+        copy.removeValue(forKey: "type")
+        guard let data = try? JSONSerialization.data(withJSONObject: copy) else { return }
+        try? data.write(to: Self.memoryFile, options: .atomic)
+    }
+
+    private func savedMemory() -> Any? {
+        guard let data = try? Data(contentsOf: Self.memoryFile) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data)
+    }
+
     private var task: URLSessionWebSocketTask?
     private var loop: Task<Void, Never>?
     private var wantConnected = false
@@ -105,7 +127,9 @@ final class ServerLink {
             task = t
             t.resume()
             // Autenticación: el token va en el primer mensaje (no en la URL).
-            if let data = try? JSONSerialization.data(withJSONObject: ["type": "hello", "token": Settings.token]),
+            var hello: [String: Any] = ["type": "hello", "token": Settings.token]
+            if let mem = savedMemory() { hello["restore"] = mem }
+            if let data = try? JSONSerialization.data(withJSONObject: hello),
                let s = String(data: data, encoding: .utf8) {
                 try? await t.send(.string(s))
             }

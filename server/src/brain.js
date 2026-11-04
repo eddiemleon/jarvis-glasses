@@ -40,6 +40,23 @@ SEGURIDAD
 
 const COMPLEX = /analiz|estrategi|compar|explic|planific|\bplan\b|por qu[eé]|c[oó]digo|calcul|resum|redact|escrib|decid|recomiend|pros y contras|paso a paso|negoci|invers|riesgo/i;
 let history = [];
+
+// Historial de la conversación sin fotos (para guardarlo en el iPhone y no perder el hilo).
+export function historySnapshot() {
+  return history.map((m) => ({
+    role: m.role,
+    content: typeof m.content === 'string' ? m.content : m.content.map((b) => {
+      if (b.type === 'tool_result' && Array.isArray(b.content)) {
+        return { ...b, content: b.content.map((c) => (c.type === 'image' ? { type: 'text', text: '[foto de las gafas]' } : c)) };
+      }
+      return b;
+    }),
+  }));
+}
+export function restoreHistory(h) {
+  if (!history.length && Array.isArray(h) && h.length) history = trimHistory(h.filter((m) => m && (m.role === 'user' || m.role === 'assistant')));
+}
+export const onTurnDone = { fn: null };
 let turn = 0;
 let current = null;
 
@@ -159,6 +176,8 @@ function friendly(e) {
     if (e.status === 429 || e.status === 529) return 'Estoy saturado un momento, señor. Intente de nuevo en unos segundos.';
     if (e.status === 404) return 'El modelo configurado no existe. Revise la variable JARVIS_MODEL.';
   }
+  if (e instanceof ApiError && e.status === 400 && /credit|billing/i.test(e.body || '')) return 'Se acabó el crédito de Anthropic, señor. Recargue en console.anthropic.com.';
+  if (/fetch failed|ENOTFOUND|ECONN|ETIMEDOUT/i.test(e?.message || '')) return 'Perdí la conexión con mi cerebro un instante, señor. Repítamelo.';
   return 'Tuve un problema procesando eso, señor. Intente otra vez.';
 }
 
@@ -170,9 +189,9 @@ export async function runTurn({ id, text, context }) {
   const turnNo = ++turn;
   const speaker = makeSpeaker(id);
   const nowMs = Date.now();
-  const welcome = welcomeNote(nowMs);
+  const welcome = context?.retried ? context.welcome : welcomeNote(nowMs);
   const ln = localNow(new Date(nowMs));
-  store.markTurn(nowMs, ln.date, ln.hm);
+  if (!context?.retried) store.markTurn(nowMs, ln.date, ln.hm);
   context = { ...context, welcome };
   const msgs = [...history, { role: 'user', content: text }];
   const ctx = { turn: turnNo, signal: ac.signal, location: context?.location };
@@ -221,11 +240,19 @@ export async function runTurn({ id, text, context }) {
       if (msg.stop_reason === 'pause_turn') continue;
       break;
     }
+    if (msgs.at(-1)?.role === 'assistant' && msgs.at(-1).content.some?.((b) => b.type === 'tool_use')) msgs.pop(); // no dejar herramientas sin respuesta
     history = trimHistory(msgs);
     hub.send({ type: 'done', id });
+    onTurnDone.fn?.();
   } catch (e) {
     if (ac.signal.aborted || e.name === 'AbortError') return;
-    log('brain error:', e.message);
+    log('brain error:', e.status || '', String(e.body || e.message).slice(0, 400));
+    // Error 400 = el historial quedó inconsistente: se limpia y se reintenta UNA vez, sin que usted lo note.
+    if (e instanceof ApiError && e.status === 400 && history.length && !context?.retried) {
+      history = [];
+      if (current?.ac === ac) current = null;
+      return runTurn({ id, text, context: { ...context, retried: true } });
+    }
     hub.send({ type: 'say', id, seq: 999, text: friendly(e) });
     hub.send({ type: 'done', id });
   } finally {
