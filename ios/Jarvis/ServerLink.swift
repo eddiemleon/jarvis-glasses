@@ -43,6 +43,7 @@ final class ServerLink {
     private var task: URLSessionWebSocketTask?
     private var loop: Task<Void, Never>?
     private var wantConnected = false
+    private var generation = 0
     private(set) var connected = false
     private let session: URLSession = {
         let c = URLSessionConfiguration.default
@@ -53,13 +54,26 @@ final class ServerLink {
 
     func connect() {
         wantConnected = true
+        if loop != nil, connected { return } // ya conectado: no abrir otra conexión (antes duplicaba respuestas)
         loop?.cancel()
-        loop = Task { [weak self] in await self?.run() }
+        task?.cancel(with: .goingAway, reason: nil)
+        task = nil
+        generation &+= 1
+        let gen = generation
+        loop = Task { [weak self] in await self?.run(gen) }
+    }
+
+    /// Cierra la conexión actual y abre una nueva (tras cambiar servidor o contraseña).
+    func reconnect() {
+        disconnect()
+        connect()
     }
 
     func disconnect() {
         wantConnected = false
+        generation &+= 1
         loop?.cancel()
+        loop = nil
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
         outbox.set(nil)
@@ -79,9 +93,9 @@ final class ServerLink {
         onConnectionChanged?(v)
     }
 
-    private func run() async {
+    private func run(_ gen: Int) async {
         var backoff: UInt64 = 1
-        while wantConnected, !Task.isCancelled {
+        while wantConnected, !Task.isCancelled, gen == generation {
             guard let url = Settings.websocketURL, !Settings.token.isEmpty else {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 continue
@@ -101,9 +115,10 @@ final class ServerLink {
                     t?.sendPing { _ in }
                 }
             }
-            receiving: while !Task.isCancelled {
+            receiving: while !Task.isCancelled, gen == generation {
                 do {
                     let msg = try await t.receive()
+                    guard gen == generation, task === t else { break receiving } // conexión vieja: se descarta
                     var text: String?
                     switch msg {
                     case .string(let s): text = s
@@ -119,9 +134,10 @@ final class ServerLink {
                 }
             }
             pinger.cancel()
+            t.cancel(with: .goingAway, reason: nil)
+            guard gen == generation else { return } // una conexión nueva ya tomó el control
             outbox.set(nil)
             setConnected(false)
-            t.cancel(with: .goingAway, reason: nil)
             if !wantConnected { return }
             try? await Task.sleep(nanoseconds: backoff * 1_000_000_000)
             backoff = min(backoff * 2, 10)

@@ -50,6 +50,7 @@ final class AppModel: ObservableObject {
     private var resumeTimer: Task<Void, Never>?
     private var lastLocationSent = Date.distantPast
     private var lastLocationCoord: CLLocation?
+    private var spokenKeys = Set<String>()
 
     init() {
         let a = AudioIO()
@@ -347,6 +348,9 @@ final class AppModel: ObservableObject {
 
         case "say":
             guard let id = m["id"] as? String, id == turnId, let t = m["text"] as? String else { return }
+            let key = "\(id)#\((m["seq"] as? Int) ?? -1)"
+            guard spokenKeys.insert(key).inserted else { return }
+            if spokenKeys.count > 500 { spokenKeys.removeAll() }
             assistantText += (assistantText.isEmpty ? "" : " ") + t
             speaker.enqueue(t)
 

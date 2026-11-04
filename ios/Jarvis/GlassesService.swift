@@ -25,8 +25,10 @@ enum WearablesBoot {
 
 enum GlassesError: LocalizedError {
     case permission, noSession, noCamera, timeout, noFrame, sdkUnavailable
+    case session(String)
     var errorDescription: String? {
         switch self {
+        case .session(let d): return "Las gafas no abrieron la sesión: \(d)"
         case .sdkUnavailable: return WearablesBoot.failure ?? "El kit de Meta no está disponible." 
         case .permission: return "Sin permiso de cámara en las gafas (concédelo en la app Meta AI)."
         case .noSession: return "No pude abrir sesión con las gafas. ¿Están puestas y conectadas?"
@@ -321,16 +323,41 @@ final class GlassesService: ObservableObject {
             }
             guard found else { throw GlassesError.noSession }
         }
-        let s = try Wearables.shared.createSession(deviceSelector: selector)
-        try s.start()
-        let ok: Bool = await withTaskGroup(of: Bool.self) { group in
-            group.addTask { for await st in s.stateStream() { if st == .started { return true }; if st == .stopped { return false } }; return false }
-            group.addTask { try? await Task.sleep(nanoseconds: 12_000_000_000); return false }
-            let first = await group.next() ?? false
+        let s: DeviceSession
+        do { s = try Wearables.shared.createSession(deviceSelector: selector) }
+        catch { throw GlassesError.session(Self.explain(error)) }
+        // Se escucha ANTES de arrancar para no perder el aviso de "started" ni el error real.
+        let states = s.stateStream()
+        let errors = s.errorStream()
+        do { try s.start() } catch { throw GlassesError.session(Self.explain(error)) }
+        if s.state == .started { session = s; return s }
+        // Espera "started"; si el kit reporta un error o se queda en pausa, se informa la causa exacta.
+        let result: String? = await withTaskGroup(of: String?.self) { group in
+            group.addTask {
+                var last = "sin respuesta"
+                for await st in states {
+                    if st == .started { return nil }
+                    last = st.description
+                    if st == .stopped { return "la sesión se detuvo" }
+                }
+                return "estado \(last)"
+            }
+            group.addTask {
+                for await e in errors { return Self.explain(e) }
+                try? await Task.sleep(nanoseconds: 20_000_000_000) // el stream terminó sin error: que decida el estado o el tiempo
+                return "sin error reportado"
+            }
+            group.addTask { try? await Task.sleep(nanoseconds: 15_000_000_000); return "tiempo agotado (estado \(s.state.description))" }
+            let first = await group.next() ?? "sin respuesta"
             group.cancelAll()
             return first
         }
-        guard ok else { s.stop(); throw GlassesError.noSession }
+        if s.state == .started { session = s; return s } // por si el aviso llegó justo al final
+        if let why = result {
+            let enPausa = s.state == .paused
+            s.stop()
+            throw GlassesError.session(enPausa ? "las gafas están en pausa: póngaselas y despliegue las patillas." : why)
+        }
         session = s
         return s
     }
@@ -351,6 +378,22 @@ final class GlassesService: ObservableObject {
             self?.session?.stop()
             self?.session = nil
         }
+    }
+
+    /// Traduce los errores del kit de Meta a instrucciones claras.
+    nonisolated static func explain(_ error: Error) -> String {
+        if let e = error as? DeviceSessionError {
+            switch e {
+            case .noEligibleDevice: return "no hay gafas disponibles. Póngaselas, ábralas y verifique que Meta AI las vea conectadas."
+            case .datAppOnTheGlassesUpdateRequired: return "Meta AI pide actualizar el software de las gafas. Abra Meta AI → Dispositivos y actualice."
+            case .insufficientSDKVersion: return "Meta AI pide una versión más nueva de esta app."
+            case .thermalCritical, .thermalEmergency: return "las gafas están muy calientes. Déjelas enfriar."
+            case .batteryCritical, .peakPowerShutdown: return "batería baja en las gafas. Cárguelas."
+            case .sessionAlreadyExists: return "ya hay una sesión abierta en las gafas (cierre otras apps que las usen)."
+            default: return e.description
+            }
+        }
+        return error.localizedDescription
     }
 
     private static func jpeg(_ image: UIImage, maxSide: CGFloat, quality: CGFloat) -> Data? {

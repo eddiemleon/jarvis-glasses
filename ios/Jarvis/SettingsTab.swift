@@ -25,7 +25,7 @@ struct SettingsTab: View {
                     TextField("https://tu-servidor.com", text: $serverURL)
                         .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
                     SecureField("Contraseña (JARVIS_TOKEN)", text: $token)
-                    Button("Reconectar") { model.link.disconnect(); model.link.connect() }
+                    Button("Reconectar") { model.link.reconnect() }
                     LabeledContent("Estado", value: model.serverConnected ? "Conectado · \(model.serverModel)" : "Sin conexión")
                 }
 

@@ -22,6 +22,7 @@ struct JarvisApp: App {
                         if let s = q["server"], let t = q["token"] {
                             UserDefaults.standard.set(s, forKey: K.serverURL)
                             UserDefaults.standard.set(t, forKey: K.token)
+                            model.link.reconnect()
                             Task { await model.start() }
                         }
                         return

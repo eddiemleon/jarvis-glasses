@@ -62,7 +62,9 @@ final class GlassesMockTests: XCTestCase {
 
     /// Distingue un fallo de la app de "el simulador de Meta no entrega imágenes" (error conocido de Meta).
     private func isSimulatorNoMedia(_ error: Error) -> Bool {
-        if let g = error as? GlassesError, g == .timeout || g == .noFrame { return true }
+        if let g = error as? GlassesError {
+            switch g { case .timeout, .noFrame: return true; default: return false }
+        }
         return false
     }
 

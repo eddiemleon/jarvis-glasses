@@ -192,6 +192,8 @@ server.on('upgrade', (req, socket, head) => {
         if (m.type === 'hello' && typeof m.token === 'string' && safeEq(m.token, config.token)) {
           ok = true;
           clearTimeout(authTimer);
+          // Una sola app a la vez: una conexión vieja que quedó abierta se cierra (evita respuestas repetidas).
+          for (const old of [...hub.clients]) if (old !== conn) { hub.remove(old); old.close(4000); }
           hub.add(conn);
           conn.send(
             JSON.stringify({
