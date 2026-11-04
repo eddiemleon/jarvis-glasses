@@ -1,0 +1,15 @@
+{
+  "name": "jarvis-glasses-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cerebro de Jarvis para Ray-Ban Meta: WebSocket + Claude + webhooks (TradingView, WhatsApp Business). Sin dependencias.",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node test/smoke.mjs && node test/live-fallback.mjs && node test/brain-order.mjs && node test/auto-brain.mjs && node test/features.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,70 @@
+# Compila la app en una Mac de GitHub (gratis) y la prueba con las gafas simuladas oficiales de Meta.
+# Resultado: Jarvis-unsigned.ipa para instalar con Sideloadly (se firma con su Apple ID).
+name: Build IPA (sin firmar)
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/build-ipa.yml'
+concurrency:
+  group: build-ipa
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Elegir el Xcode más nuevo
+        run: |
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          [ -n "$X" ] && sudo xcode-select -s "$X"
+          xcodebuild -version
+          xcrun simctl list devices available | grep -i iphone | head -5
+      - name: Instalar XcodeGen
+        run: brew install xcodegen
+      - name: Generar proyecto
+        working-directory: ios
+        run: xcodegen generate
+      - name: Resolver paquetes (SDK de Meta)
+        working-directory: ios
+        run: xcodebuild -resolvePackageDependencies -project Jarvis.xcodeproj -scheme Jarvis
+      - name: Compilar para iPhone
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -configuration Release \
+            -sdk iphoneos -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build 2>&1 | tee build.log
+      - name: Empaquetar .ipa
+        working-directory: ios
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Jarvis.app Payload/
+          zip -qry Jarvis-unsigned.ipa Payload
+          ls -la Jarvis-unsigned.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Jarvis-unsigned-ipa
+          path: ios/Jarvis-unsigned.ipa
+      - name: Probar con gafas simuladas de Meta (simulador de iPhone)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          SIM=$(xcrun simctl list devices available | grep -E "iPhone 1[5-9]|iPhone 2" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          echo "Simulador: $SIM"
+          xcodebuild test -project Jarvis.xcodeproj -scheme Jarvis -destination "id=$SIM" \
+            -derivedDataPath build-test CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log
+      - name: Errores de compilación (resumen)
+        if: failure()
+        working-directory: ios
+        run: |
+          grep -hE "error:|warning: .*deprecated|Test Case .* failed|XCTAssert" build.log test.log 2>/dev/null | sort -u | head -80 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs
+          path: |
+            ios/build.log
+            ios/test.log

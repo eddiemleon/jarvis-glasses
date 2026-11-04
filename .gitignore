@@ -1,0 +1,9 @@
+server/.env
+server/data/
+server/node_modules/
+ios/Jarvis.xcodeproj/
+ios/Pods/
+ios/build/
+.DS_Store
+xcuserdata/
+*.xcuserstate

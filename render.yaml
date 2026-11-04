@@ -1,0 +1,23 @@
+# Un clic: Render → New → Blueprint → este repositorio. Pega solo tu clave de IA.
+services:
+  - type: web
+    name: jarvis
+    runtime: docker
+    # Virginia (EE. UU. este) es la región de Render más cercana a Puerto Rico: menos retraso en la transmisión en vivo.
+    # Render no permite cambiar la región de un servicio ya creado.
+    region: virginia
+    dockerContext: ./server
+    dockerfilePath: ./server/Dockerfile
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: JARVIS_TOKEN
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+    disk:
+      name: jarvis-data
+      mountPath: /data
+      sizeGB: 1
