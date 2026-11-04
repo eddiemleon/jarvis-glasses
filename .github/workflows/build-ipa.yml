@@ -56,8 +56,18 @@ jobs:
           set -o pipefail
           SIM=$(xcrun simctl list devices available | grep -E "iPhone 1[5-9]|iPhone 2" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
           echo "Simulador: $SIM"
-          xcodebuild test -project Jarvis.xcodeproj -scheme Jarvis -destination "id=$SIM" \
-            -derivedDataPath build-test CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO 2>&1 | tee test.log
+          # Reintento: el simulador de Apple a veces se bloquea al arrancar ("RPC timeout"), sin relación con la app.
+          for intento in 1 2 3; do
+            echo "Intento $intento" | tee -a test.log
+            if xcodebuild test -project Jarvis.xcodeproj -scheme Jarvis -destination "id=$SIM" \
+                 -derivedDataPath build-test CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO > test-run.log 2>&1; then
+              cat test-run.log >> test.log; exit 0
+            fi
+            cat test-run.log >> test.log
+            grep -q "never finished bootstrapping\|deadlocked" test-run.log || exit 1
+            xcrun simctl shutdown all || true; xcrun simctl erase "$SIM" || true; sleep 5
+          done
+          exit 1
       - name: Publicar la app en "Releases" (descarga directa)
         if: success()
         env:

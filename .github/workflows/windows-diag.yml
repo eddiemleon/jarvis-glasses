@@ -1,0 +1,54 @@
+name: Diagnostico Windows
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/windows-diag.yml']
+permissions:
+  contents: write
+jobs:
+  diag:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: pwsh
+        run: |
+          $o = @()
+          $o += "OS: " + (Get-CimInstance Win32_OperatingSystem).Caption
+          Invoke-WebRequest https://sideloadly.io/SideloadlySetup64.exe -OutFile $env:TEMP\sl.exe -UseBasicParsing
+          $f = Get-Item $env:TEMP\sl.exe; $o += "Sideloadly bytes: $($f.Length)"
+          $sig = Get-AuthenticodeSignature $f.FullName; $o += "Firma: $($sig.Status) / $($sig.SignerCertificate.Subject)"
+          $b = [IO.File]::ReadAllBytes($f.FullName); $t = [Text.Encoding]::ASCII.GetString($b)
+          foreach ($k in 'Inno Setup','Nullsoft','NSIS','WiX','InstallShield','Advanced Installer','7-Zip') { if ($t.Contains($k)) { $o += "contiene: $k" } }
+          $o += "--- winget show Sideloadly"; $o += (winget show -e --id iOSGods.Sideloadly --accept-source-agreements | Out-String)
+          $o += "--- winget show iCloud"; $o += (winget show -e --id Apple.iCloud --accept-source-agreements | Out-String)
+          $o | Set-Content diag.txt
+      - name: Probar instalación silenciosa de Sideloadly
+        shell: pwsh
+        run: |
+          $o = @()
+          foreach ($args2 in @('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-', '/S')) {
+            $p = Start-Process $env:TEMP\sl.exe -ArgumentList $args2 -Wait -PassThru
+            $o += "args [$args2] exit=$($p.ExitCode)"
+            $lnk = Get-ChildItem "$env:ProgramData\Microsoft\Windows\Start Menu\Programs","$env:APPDATA\Microsoft\Windows\Start Menu\Programs" -Recurse -Filter 'Sideloadly*.lnk' -EA SilentlyContinue | % FullName
+            $exe = Get-ChildItem "$env:ProgramFiles","${env:ProgramFiles(x86)}","$env:LOCALAPPDATA" -Recurse -Filter 'sideloadly*.exe' -Depth 3 -EA SilentlyContinue | % FullName
+            $o += "  accesos: $($lnk -join ';')"; $o += "  exes: $($exe -join ';')"
+            if ($lnk -or $exe) { break }
+          }
+          $o | Add-Content diag.txt
+      - name: Probar iCloud clásico
+        shell: pwsh
+        run: |
+          $o = @()
+          winget install -e --id Apple.iCloud --silent --accept-package-agreements --accept-source-agreements --disable-interactivity --log $env:TEMP\icloud-winget.log | Out-Null
+          $o += "winget exit=$LASTEXITCODE"
+          $o += "--- log winget (final)"; $o += (Get-Content $env:TEMP\icloud-winget.log -Tail 25 -EA SilentlyContinue)
+          $o += "--- servicios Apple"; $o += (Get-Service | ? { $_.DisplayName -match 'Apple|Bonjour|iPod|Mobile Device' } | % { "$($_.Name) | $($_.DisplayName) | $($_.Status)" })
+          $o += "--- programas Apple"; $o += (Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*, HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* -EA SilentlyContinue | ? { $_.Publisher -match 'Apple' } | % { "$($_.DisplayName) $($_.DisplayVersion)" })
+          $o | Add-Content diag.txt
+      - if: always()
+        shell: bash
+        run: |
+          cp diag.txt /tmp/diag.txt 2>/dev/null || echo "sin diag" > /tmp/diag.txt
+          git config user.name jarvis-ci; git config user.email ci@users.noreply.github.com
+          git checkout -q --orphan win-diag; git rm -rqf --cached . >/dev/null 2>&1 || true
+          cp /tmp/diag.txt report.txt; git add report.txt; git commit -qm diag; git push -qf origin HEAD:win-diag
