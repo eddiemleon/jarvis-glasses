@@ -58,6 +58,14 @@ jobs:
           echo "Simulador: $SIM"
           xcodebuild test -project Jarvis.xcodeproj -scheme Jarvis -destination "id=$SIM" \
             -derivedDataPath build-test CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO 2>&1 | tee test.log
+      - name: Publicar la app en "Releases" (descarga directa)
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ultima --yes --cleanup-tag 2>/dev/null || true
+          gh release create ultima ios/Jarvis-unsigned.ipa --title "Jarvis - última versión" \
+            --notes "Compilada y probada con las gafas simuladas de Meta. Instálela con Sideloadly usando su Apple ID." --latest
       - name: Publicar informe de compilación y pruebas
         if: always()
         working-directory: ios
