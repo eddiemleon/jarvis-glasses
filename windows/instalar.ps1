@@ -74,6 +74,27 @@ function BuscarSideloadly {
     return $null
 }
 
+# Instaladores de Apple (iTunes/iCloud): se extraen sus paquetes MSI y se instalan en silencio, en orden.
+function InstalarApple($exe, $patron) {
+    $dir = Join-Path $Work ([IO.Path]::GetFileNameWithoutExtension($exe))
+    Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $p = Start-Process $exe -ArgumentList "/extract `"$dir`"" -Wait -PassThru
+    $msis = Get-ChildItem $dir -Filter *.msi -Recurse -ErrorAction SilentlyContinue
+    Write-Host "    extraidos: $(($msis | ForEach-Object Name) -join ', ') (codigo $($p.ExitCode))"
+    if (-not $msis) {
+        $p = Start-Process $exe -ArgumentList '/qn /norestart' -Wait -PassThru
+        Write-Host "    instalador directo: codigo $($p.ExitCode)"
+        return (Instalado $patron)
+    }
+    $orden = { switch -Wildcard ($_.Name) { 'AppleApplicationSupport*' { 0 } 'AppleMobileDeviceSupport*' { 1 } 'Bonjour*' { 2 } 'AppleSoftwareUpdate*' { 3 } default { 9 } } }
+    foreach ($m in ($msis | Sort-Object $orden, Name)) {
+        $p = Start-Process msiexec.exe -ArgumentList "/i `"$($m.FullName)`" /qn /norestart" -Wait -PassThru
+        Write-Host "    $($m.Name): codigo $($p.ExitCode)"
+    }
+    return (Instalado $patron)
+}
+
 function Winget { [bool](Get-Command winget.exe -ErrorAction SilentlyContinue) }
 
 $fallos = @()
@@ -90,8 +111,7 @@ else {
     }
     if (-not $hecho) {
         $exe = Descargar 'https://www.apple.com/itunes/download/win64' 'iTunes64Setup.exe'
-        Start-Process $exe -ArgumentList '/qn /norestart' -Wait
-        $hecho = Instalado 'iTunes'
+        $hecho = InstalarApple $exe 'iTunes'
         if (-not $hecho -and -not $CI) { Aviso 'Instalacion silenciosa no funciono: siga el asistente de iTunes.'; Start-Process $exe -Wait; $hecho = Instalado 'iTunes' }
     }
     if ($hecho) { Ok 'Instalado' } else { $fallos += 'iTunes' }
@@ -103,8 +123,7 @@ if (StoreApp '*AppleInc.iCloud*') { Aviso 'Tiene iCloud de Microsoft Store: desi
 elseif (Instalado 'iCloud*') { Ok 'Ya estaba instalado' }
 else {
     $exe = Descargar 'https://updates.cdn-apple.com/2020/windows/001-39935-20200911-1A70AA56-F448-11EA-8CC0-99D41950005E/iCloudSetup.exe' 'iCloudSetup.exe'
-    Start-Process $exe -ArgumentList '/qn /norestart' -Wait
-    $hecho = Instalado 'iCloud*'
+    $hecho = InstalarApple $exe 'iCloud*'
     if (-not $hecho -and -not $CI) { Aviso 'Instalacion silenciosa no funciono: siga el asistente de iCloud.'; Start-Process $exe -Wait; $hecho = Instalado 'iCloud*' }
     if ($hecho) { Ok 'Instalado' } else { $fallos += 'iCloud' }
 }
@@ -113,7 +132,15 @@ else {
 Paso 'Sideloadly'
 if (Instalado 'Sideloadly*') { Ok 'Ya estaba instalado' }
 else {
-    if (Winget) { winget install -e --id iOSGods.Sideloadly --silent --accept-package-agreements --accept-source-agreements --disable-interactivity }
+    if (Winget) {
+        winget install -e --id iOSGods.Sideloadly --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+        Write-Host "    winget Sideloadly: codigo $LASTEXITCODE"
+    }
+    if (-not (Instalado 'Sideloadly*')) {
+        $exe = Descargar 'https://sideloadly.io/SideloadlySetup64.exe' 'SideloadlySetup64.exe'
+        $p = Start-Process $exe -ArgumentList '/S' -Wait -PassThru
+        Write-Host "    instalador Sideloadly: codigo $($p.ExitCode)"
+    }
     if (Instalado 'Sideloadly*') { Ok 'Instalado' }
     else { $fallos += 'Sideloadly'; if (-not $CI) { Aviso 'Descarguelo de sideloadly.io (se abre ahora).'; Start-Process 'https://sideloadly.io' } }
 }
@@ -128,6 +155,9 @@ Stop-Transcript | Out-Null
 
 if ($CI) {
     Write-Host "Sideloadly en: $(BuscarSideloadly)"
+    Write-Host "winget presente: $(Winget)"
+    Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*','HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -match 'Apple|iTunes|iCloud|Bonjour|Sideloadly' } | ForEach-Object { Write-Host "  instalado: $($_.DisplayName) $($_.DisplayVersion)" }
     if ($fallos.Count) { Write-Host "FALTA: $($fallos -join ', ')"; exit 1 }
     Write-Host 'TODO INSTALADO'; exit 0
 }
