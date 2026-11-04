@@ -96,7 +96,9 @@ function InstalarApple($exe, $patron) {
         $p = Start-Process msiexec.exe -ArgumentList "/i `"$($m.FullName)`" /qn /norestart /l*v `"$mlog`"" -Wait -PassThru
         Write-Host "    $($m.Name): codigo $($p.ExitCode)"
         if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010 -and (Test-Path $mlog)) {
-            Get-Content $mlog -ErrorAction SilentlyContinue | Select-String -Pattern 'Return value 3|error|LaunchCondition|requires|Windows' -SimpleMatch:$false | Select-Object -Last 12 | ForEach-Object { Write-Host "      log: $($_.Line.Trim())" }
+            $lines = Get-Content $mlog -ErrorAction SilentlyContinue
+            $i = [Array]::FindIndex([string[]]$lines, [Predicate[string]]{ param($x) $x -match 'Return value 3' })
+            if ($i -ge 0) { $lines[[Math]::Max(0, $i - 14)..$i] | ForEach-Object { Write-Host "      log: $($_.Trim())" } }
         }
     }
     return (Instalado $patron)
