@@ -10,6 +10,8 @@ on:
 concurrency:
   group: build-ipa
   cancel-in-progress: true
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: macos-26
@@ -56,11 +58,25 @@ jobs:
           echo "Simulador: $SIM"
           xcodebuild test -project Jarvis.xcodeproj -scheme Jarvis -destination "id=$SIM" \
             -derivedDataPath build-test CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log
-      - name: Errores de compilación (resumen)
-        if: failure()
+      - name: Publicar informe de compilación y pruebas
+        if: always()
         working-directory: ios
         run: |
-          grep -hE "error:|warning: .*deprecated|Test Case .* failed|XCTAssert" build.log test.log 2>/dev/null | sort -u | head -80 || true
+          {
+            echo "run=${{ github.run_id }} commit=${{ github.sha }} fecha=$(date -u +%FT%TZ)"
+            echo "== compilación =="; grep -E "error:|BUILD SUCCEEDED|BUILD FAILED" build.log 2>/dev/null | sort -u | head -60
+            echo "== pruebas =="
+            grep -E "error:|Test Case|Executed|TEST SUCCEEDED|TEST FAILED|Testing failed|XCTAssert|Simulador|Unable|Failed|failed" test.log 2>/dev/null | head -150
+            echo "== final de pruebas =="; tail -60 test.log 2>/dev/null
+          } > report.txt || true
+          cp report.txt /tmp/report.txt
+          cd "$GITHUB_WORKSPACE"
+          git config user.name "jarvis-ci"; git config user.email "ci@users.noreply.github.com"
+          git checkout -q --orphan ci-report
+          git rm -rqf --cached . >/dev/null 2>&1 || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp /tmp/report.txt report.txt
+          git add report.txt && git commit -qm "informe ${{ github.run_id }}" && git push -qf origin HEAD:ci-report || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
