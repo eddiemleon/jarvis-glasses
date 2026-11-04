@@ -1,4 +1,4 @@
-# Prueba el instalador de Windows en una PC Windows real de GitHub.
+# Prueba real del instalador de Windows en una PC Windows de GitHub (sin iPhone).
 name: Probar instalador de Windows
 on:
   push:
@@ -11,37 +11,24 @@ permissions:
 jobs:
   test:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-      - name: Ejecutar Instalar-Jarvis.cmd
-        shell: cmd
-        env:
-          JARVIS_CI: '1'
+      - name: Instalar todo con instalar.ps1
+        shell: powershell
         run: |
-          windows\Instalar-Jarvis.cmd > win-install.log 2>&1
-          echo EXIT=%errorlevel% >> win-install.log
-          type win-install.log
-      - name: Verificar lo instalado
-        if: always()
-        shell: pwsh
-        run: |
-          $r = @()
-          foreach ($id in 'Apple.iTunes','Apple.iCloud') {
-            $o = winget list -e --id $id --accept-source-agreements | Out-String
-            $r += "$id instalado=$($o -match [regex]::Escape($id))"
-          }
-          $r += "iTunes.exe=" + (Test-Path "$env:ProgramFiles\iTunes\iTunes.exe")
-          $r += "Accesos Sideloadly=" + ((Get-ChildItem "$env:ProgramData\Microsoft\Windows\Start Menu\Programs","$env:APPDATA\Microsoft\Windows\Start Menu\Programs" -Recurse -Filter 'Sideloadly*.lnk' -ErrorAction SilentlyContinue | ForEach-Object FullName) -join ';')
-          $r += "AppleMobileDevice=" + [bool](Get-Service -Name 'Apple Mobile Device Service' -ErrorAction SilentlyContinue)
-          $r | Tee-Object -FilePath win-verify.log
+          [IO.File]::WriteAllBytes("$PWD\windows\Jarvis.ipa", (New-Object byte[] 2048))
+          winget --version
+          powershell -NoProfile -ExecutionPolicy Bypass -File windows\instalar.ps1 -CI *>&1 | Tee-Object -FilePath win.log
+          exit $LASTEXITCODE
       - name: Publicar informe
         if: always()
         shell: bash
         run: |
-          cat win-install.log win-verify.log > /tmp/win-report.txt 2>/dev/null || true
-          git config user.name jarvis-ci; git config user.email ci@users.noreply.github.com
+          cp win.log /tmp/win.log 2>/dev/null || echo "sin log" > /tmp/win.log
+          git config user.name "jarvis-ci"; git config user.email "ci@users.noreply.github.com"
           git checkout -q --orphan win-report
           git rm -rqf --cached . >/dev/null 2>&1 || true
-          cp /tmp/win-report.txt report.txt
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp /tmp/win.log report.txt
           git add report.txt && git commit -qm "informe windows ${{ github.run_id }}" && git push -qf origin HEAD:win-report || true

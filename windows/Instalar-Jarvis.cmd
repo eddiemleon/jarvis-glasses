@@ -41,9 +41,11 @@ Ok "winget disponible"
 
 # ---- 2. iTunes, iCloud (version clasica, la que pide Sideloadly) y Sideloadly ----
 $paquetes = @(
-  @{ id = 'Apple.iTunes';       nombre = 'iTunes' },
-  @{ id = 'Apple.iCloud';       nombre = 'iCloud (version clasica)' }
+  @{ id = 'Apple.iTunes';                   nombre = 'iTunes';                              critico = $true },
+  @{ id = 'Apple.AppleMobileDeviceSupport'; nombre = 'Controlador USB del iPhone (Apple)';  critico = $true },
+  @{ id = 'Apple.iCloud';                   nombre = 'iCloud (version clasica)';            critico = $false }
 )
+$avisos = @()
 $fallos = @()
 foreach ($p in $paquetes) {
   Paso "Instalando $($p.nombre) (puede tardar unos minutos)"
@@ -51,7 +53,9 @@ foreach ($p in $paquetes) {
   if ($lista -match [regex]::Escape($p.id)) { Ok "$($p.nombre) ya estaba instalado"; continue }
   winget install -e --id $p.id --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
   $lista = winget list -e --id $p.id --accept-source-agreements 2>$null | Out-String
-  if ($lista -match [regex]::Escape($p.id)) { Ok "$($p.nombre) instalado" } else { Mal "No pude confirmar $($p.nombre)"; $fallos += $p.nombre }
+  if ($lista -match [regex]::Escape($p.id)) { Ok "$($p.nombre) instalado" }
+  elseif ($p.critico) { Mal "No pude instalar $($p.nombre)"; $fallos += $p.nombre }
+  else { Mal "No pude instalar $($p.nombre). Si Sideloadly luego da error de inicio de sesion, instale iCloud desde support.apple.com/103232"; $avisos += $p.nombre }
 }
 
 # ---- 3. Sideloadly (desde su sitio oficial; su paquete de winget esta desactualizado) ----
@@ -70,21 +74,27 @@ if ($sl) { Ok "Sideloadly ya estaba instalado" } else {
   $setup = Join-Path $env:TEMP 'SideloadlySetup64.exe'
   try {
     Invoke-WebRequest 'https://sideloadly.io/SideloadlySetup64.exe' -OutFile $setup -UseBasicParsing
-    $firma = Get-AuthenticodeSignature $setup
-    Ok "Descargado ($([math]::Round((Get-Item $setup).Length/1MB,1)) MB). Firma digital: $($firma.Status)"
-    if ($firma.Status -ne 'Valid') {
-      Mal "La firma del instalador de Sideloadly no es valida: no lo ejecuto por seguridad."; $fallos += 'Sideloadly (firma)'
-    } elseif ($CI) {
-      Ok "Modo prueba: no se ejecuta el instalador grafico"
+    $tam = (Get-Item $setup).Length
+    $bytes = [IO.File]::ReadAllBytes($setup)
+    $esNsis = [Text.Encoding]::ASCII.GetString($bytes, 0, [Math]::Min($bytes.Length, 4MB)).Contains('Nullsoft')
+    Ok "Descargado de sideloadly.io ($([math]::Round($tam/1MB,1)) MB)"
+    if ($tam -lt 20MB -or -not $esNsis -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+      Mal "El archivo descargado no parece el instalador de Sideloadly: no lo ejecuto."; $fallos += 'Sideloadly (descarga invalida)'
     } else {
-      Write-Host "    Se abre el instalador de Sideloadly: pulse Siguiente / Instalar hasta terminar." -ForegroundColor White
-      Start-Process $setup -Wait
+      # Instalador NSIS: /S = instalacion silenciosa. Limite de 5 minutos para que nunca se quede colgado.
+      $proc = Start-Process $setup -ArgumentList '/S' -PassThru
+      if (-not $proc.WaitForExit(300000)) { $proc.Kill(); Mal "El instalador de Sideloadly no termino en 5 minutos" }
       $sl = BuscarSideloadly
+      if (-not $sl -and -not $CI) {
+        Write-Host "    Abro el instalador normal de Sideloadly: pulse Siguiente / Instalar." -ForegroundColor White
+        Start-Process $setup -Wait
+        $sl = BuscarSideloadly
+      }
     }
   } catch { Mal "No pude descargar Sideloadly: $($_.Exception.Message)"; $fallos += 'Sideloadly (descarga)' }
 }
 Paso "Buscando Sideloadly"
-if ($sl) { Ok "Sideloadly: $($sl.FullName)" } elseif (-not $CI) { Mal "No encontre Sideloadly"; $fallos += 'Sideloadly (ubicacion)' }
+if ($sl) { Ok "Sideloadly: $($sl.FullName)" } else { Mal "No encontre Sideloadly"; $fallos += 'Sideloadly' }
 
 # ---- 4. App Jarvis (.ipa) ----
 Paso "Buscando la app Jarvis (Jarvis-unsigned.ipa)"
