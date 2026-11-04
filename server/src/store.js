@@ -3,7 +3,7 @@ import path from 'node:path';
 import { config, log } from './config.js';
 
 const file = path.join(config.dataDir, 'state.json');
-let state = { facts: [], alerts: [], wa: [], reminders: [], visual: [], routines: [] };
+let state = { facts: [], alerts: [], wa: [], reminders: [], visual: [], routines: [], activity: { last: 0, days: {} } };
 try {
   state = { ...state, ...JSON.parse(fs.readFileSync(file, 'utf8')) };
 } catch {
@@ -92,6 +92,19 @@ export const store = {
     ids.forEach(dropVisualFile);
     save();
     return ids.length;
+  },
+
+  // ---- actividad: cuándo conversa el usuario (para el saludo de regreso) ----
+  activity: () => state.activity || (state.activity = { last: 0, days: {} }),
+  markTurn(now, day, hm) {
+    const a = store.activity();
+    a.last = now;
+    const d = (a.days[day] ||= { first: hm, last: hm, turns: 0 });
+    d.last = hm;
+    d.turns++;
+    const keys = Object.keys(a.days).sort();
+    while (keys.length > 14) delete a.days[keys.shift()];
+    save();
   },
 
   // ---- rutinas programadas ----

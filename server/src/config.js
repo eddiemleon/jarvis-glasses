@@ -14,7 +14,9 @@ export const config = {
   webSearch: env.WEB_SEARCH !== '0',
   mock: env.MOCK_LLM === '1',
   tz: env.JARVIS_TZ || 'America/Puerto_Rico',
-  owner: env.JARVIS_OWNER || 'Eddie',
+  owner: env.JARVIS_OWNER || 'Leon',
+  // Tras cuántos minutos sin hablar Jarvis lo recibe con "Bienvenido de vuelta".
+  welcomeAfterMin: Number(env.JARVIS_WELCOME_MIN || 30),
   publicUrl: (env.PUBLIC_URL || '').replace(/\/+$/, ''),
   dataDir: env.DATA_DIR || './data',
   tvSecret: env.TV_SECRET || '',

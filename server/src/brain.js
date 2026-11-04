@@ -5,6 +5,7 @@ import { store } from './store.js';
 import { ApiError } from './claude.js';
 import { callLLM } from './llm.js';
 import { toolDefs, runTool, BACKGROUND_TOOLS } from './tools.js';
+import { localNow } from './routines.js';
 
 const STATIC_PROMPT = `Eres JARVIS, el asistente personal de IA de ${config.owner}, que te habla por voz a través de sus gafas Ray-Ban Meta. Todo lo que escribas se convierte en voz y suena en su oído.
 
@@ -46,6 +47,21 @@ export function cancelCurrent() {
   current?.ac.abort();
 }
 
+// Saludo de regreso: si pasó un buen rato sin hablar, Jarvis lo recibe con naturalidad.
+export function welcomeNote(now = Date.now()) {
+  const a = store.activity();
+  const mins = a.last ? Math.round((now - a.last) / 60_000) : null;
+  if (mins !== null && mins < config.welcomeAfterMin) return '';
+  const today = localNow(new Date(now)).date;
+  const prev = Object.keys(a.days).filter((d) => d < today).sort();
+  const hist = prev.slice(-3).map((d) => `${d}: primera ${a.days[d].first}, última ${a.days[d].last} (${a.days[d].turns} intervenciones)`);
+  const hoy = a.days[today];
+  const gap = mins === null ? 'primera vez que hablan (o el servidor se reinició)' : mins < 120 ? `${mins} minutos` : mins < 2880 ? `${Math.round(mins / 60)} horas` : `${Math.round(mins / 1440)} días`;
+  return `SALUDO DE REGRESO (obligatorio en esta respuesta): ${config.owner} vuelve tras ${gap} sin hablar contigo.
+Empieza EXACTAMENTE con "Bienvenido de vuelta, señor ${config.owner}." y sigue con UNA frase breve y natural, como un colega que lo conoce: según la hora (buenos días/tardes/noches), cómo le va el día, qué tiene pendiente hoy (recordatorios, rutinas, alertas recientes) o algo de lo que sabes de él. Puedes mencionar con tacto un patrón real de los datos (por ejemplo, que ayer se quedó despierto hasta tarde). No inventes nada que no esté en estos datos. Después atiende lo que te pidió.
+${hoy ? `Hoy ya habló contigo desde las ${hoy.first}.` : 'Es su primera conversación de hoy.'}${hist.length ? '\nDías anteriores (hora local): ' + hist.join('; ') : ''}`;
+}
+
 function dynamicContext(ctx) {
   const now = new Date().toLocaleString('es-US', { timeZone: config.tz, dateStyle: 'full', timeStyle: 'short' });
   const lines = [`Ahora: ${now} (${config.tz}).`];
@@ -60,6 +76,9 @@ function dynamicContext(ctx) {
   if (ctx?.glasses) lines.push(`Gafas: ${ctx.glasses}.`);
   const facts = store.facts();
   if (facts.length) lines.push('Lo que sabes del usuario:\n- ' + facts.join('\n- '));
+  const pend = store.reminders().slice().sort((a, b) => a.at - b.at).slice(0, 5);
+  if (pend.length) lines.push('Recordatorios pendientes: ' + pend.map((r) => `${r.text} (${new Date(r.at).toLocaleString('es-US', { timeZone: config.tz, timeStyle: 'short', dateStyle: 'short' })})`).join('; '));
+  if (ctx?.welcome) lines.push(ctx.welcome);
   return lines.join('\n');
 }
 
@@ -150,6 +169,11 @@ export async function runTurn({ id, text, context }) {
   current = { ac, id };
   const turnNo = ++turn;
   const speaker = makeSpeaker(id);
+  const nowMs = Date.now();
+  const welcome = welcomeNote(nowMs);
+  const ln = localNow(new Date(nowMs));
+  store.markTurn(nowMs, ln.date, ln.hm);
+  context = { ...context, welcome };
   const msgs = [...history, { role: 'user', content: text }];
   const ctx = { turn: turnNo, signal: ac.signal, location: context?.location };
 
