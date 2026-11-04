@@ -66,6 +66,16 @@ jobs:
           gh release delete ultima --yes --cleanup-tag 2>/dev/null || true
           gh release create ultima ios/Jarvis-unsigned.ipa --title "Jarvis - última versión" \
             --notes "Compilada y probada con las gafas simuladas de Meta. Instálela con Sideloadly usando su Apple ID." --latest
+      - name: Guardar la app en la rama "app" (para entregarla directo)
+        if: success()
+        run: |
+          cp ios/Jarvis-unsigned.ipa /tmp/Jarvis-unsigned.ipa
+          git config user.name "jarvis-ci"; git config user.email "ci@users.noreply.github.com"
+          git checkout -q --orphan app
+          git rm -rqf --cached . >/dev/null 2>&1 || true
+          cp /tmp/Jarvis-unsigned.ipa Jarvis-unsigned.ipa
+          git add -f Jarvis-unsigned.ipa && git commit -qm "app ${{ github.run_id }}" && git push -qf origin HEAD:app
+          git checkout -q -f ${{ github.sha }}
       - name: Publicar informe de compilación y pruebas
         if: always()
         working-directory: ios
