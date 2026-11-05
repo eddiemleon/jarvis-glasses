@@ -25,7 +25,7 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq build-essential cmake ninja-build >/dev/null
           pip install -q torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
-          pip install -q coqui-tts six librosa huggingface_hub onnx sherpa-onnx
+          pip install -q coqui-tts six librosa huggingface_hub onnx sherpa-onnx==1.12.40
       - name: Entrenamiento mínimo y prueba con el motor del iPhone
         env:
           COQUI_TOS_AGREED: '1'
