@@ -1,0 +1,45 @@
+# Valida de punta a punta el entrenamiento de la voz de Jarvis para el iPhone (versión mínima, sin GPU):
+# voz clonada -> Piper afinado -> ONNX -> síntesis con sherpa-onnx (el mismo motor que usará el iPhone).
+name: Voz - iPhone (prueba)
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'voz/movil/**'
+      - '.github/workflows/voz-movil.yml'
+concurrency:
+  group: voz-movil
+  cancel-in-progress: true
+permissions:
+  contents: write
+jobs:
+  prueba:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Dependencias
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq build-essential cmake ninja-build >/dev/null
+          pip install -q torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install -q coqui-tts six librosa huggingface_hub onnx sherpa-onnx
+      - name: Entrenamiento mínimo y prueba con el motor del iPhone
+        env:
+          COQUI_TOS_AGREED: '1'
+        run: |
+          cp voz/referencia.wav voz/movil/
+          python voz/movil/entrenar.py --salida /tmp/vm --prueba 2>&1 | tee /tmp/vm.log
+      - name: Guardar resultado
+        if: always()
+        run: |
+          mkdir -p /tmp/res && cp /tmp/vm.log /tmp/res/ 2>/dev/null || true
+          cp /tmp/vm/prueba_iphone_*.wav /tmp/vm/config.json /tmp/res/ 2>/dev/null || true
+          ls -la /tmp/vm/jarvis-voz 2>/dev/null | tee /tmp/res/archivos.txt || true
+          git config user.name "jarvis-ci"; git config user.email "ci@users.noreply.github.com"
+          git checkout -q --orphan voz-movil
+          git rm -rqf --cached . >/dev/null 2>&1 || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp /tmp/res/* . && git add -A && git commit -qm "voz movil ${{ github.run_id }}" && git push -qf origin HEAD:voz-movil || true
