@@ -5,7 +5,7 @@ final class Outbox: @unchecked Sendable {
     private let lock = NSLock()
     private var task: URLSessionWebSocketTask?
     private var inflight = 0
-    /// Cuadros de video aún sin enviar. Baja latencia: con 2 en camino, el nuevo se salta (siempre lo más reciente, sin fila).
+    /// Cuadros de video aún sin enviar. Baja latencia: con 4 en camino, el nuevo se salta (siempre lo más reciente, sin fila).
     private var videoInflight = 0
 
     func set(_ t: URLSessionWebSocketTask?) {
@@ -18,7 +18,7 @@ final class Outbox: @unchecked Sendable {
         lock.lock()
         guard let t = task else { lock.unlock(); return false }
         if droppable {
-            if isVideo && videoInflight >= 2 { lock.unlock(); return false }
+            if isVideo && videoInflight >= 4 { lock.unlock(); return false }
             if !isVideo && inflight > 6 { lock.unlock(); return false }
         }
         if isVideo { videoInflight += 1 } else { inflight += 1 }

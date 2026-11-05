@@ -188,7 +188,7 @@ final class GlassesService: ObservableObject {
         streamBag = ListenerTokenBag()
         // Cuadros hacia la red: 30/s en fluida, 24/s en equilibrada, 20/s en máxima (cada cuadro pesa más).
         let sendGate = FrameThrottle(minInterval: q == "maxima" ? 0.05 : (q == "fluida" ? 0.033 : 0.041))
-        let previewGate = FrameThrottle(minInterval: 0.12)
+        let previewGate = FrameThrottle(minInterval: 0.033) // vista en la app a 30 cuadros/s
         let box = latest
         let sink = frameSink
         let quality: CGFloat = q == "maxima" ? 0.7 : 0.6
