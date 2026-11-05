@@ -64,7 +64,9 @@ class Voz:
     @staticmethod
     def limpiar(texto):
         t = re.sub(r"\s+", " ", texto).strip()
-        t = t.replace("…", "...")
+        # Los puntos suspensivos hacen que XTTS "alargue" o balbucee: se convierten en una pausa con coma.
+        t = re.sub(r"\s*(\.{2,}|…)\s*", ", ", t)
+        t = re.sub(r",\s*([.!?])", r"\1", t).strip(" ,")
         return t[:600]
 
     @staticmethod
@@ -113,15 +115,23 @@ class Voz:
         trozos = []
         with self.lock, self.torch.inference_mode():
             for parte in self.trozos(t):
-                out = self.model.inference(
-                    parte, "es", self.gpt_latent, self.speaker_emb,
-                    # Más expresiva (al estilo Jarvis): algo más de variación en tono y ritmo, sin perder claridad.
-                    temperature=0.78, length_penalty=1.0, repetition_penalty=4.0,
-                    top_k=60, top_p=0.9, speed=1.03, enable_text_splitting=False,
-                )
-                w = out["wav"]
-                w = w.cpu().numpy() if hasattr(w, "cpu") else np.asarray(w)
-                trozos.append(self.recortar(w.astype(np.float32)))
+                # Duración esperada en español: ~0.075 s por carácter. Si sale mucho más larga, el modelo
+                # se "alargó" o balbuceó: se regenera con menos variación (hasta 2 intentos más).
+                limite = 0.11 * len(parte) + 1.2
+                for temp in (0.78, 0.62, 0.5):
+                    out = self.model.inference(
+                        parte, "es", self.gpt_latent, self.speaker_emb,
+                        # Expresiva (al estilo Jarvis), con respaldo más estable si se desvía.
+                        temperature=temp, length_penalty=1.0, repetition_penalty=4.0 if temp > 0.7 else 6.0,
+                        top_k=60, top_p=0.9, speed=1.03, enable_text_splitting=False,
+                    )
+                    w = out["wav"]
+                    w = w.cpu().numpy() if hasattr(w, "cpu") else np.asarray(w)
+                    w = self.recortar(w.astype(np.float32))
+                    if len(w) / SR <= limite:
+                        break
+                    log(f"frase demasiado larga ({len(w) / SR:.1f}s > {limite:.1f}s), regenerando")
+                trozos.append(w)
                 trozos.append(np.zeros(int(SR * 0.18), dtype=np.float32))  # pausa natural entre oraciones
         audio = np.concatenate(trozos) if trozos else np.zeros(1, dtype=np.float32)
         audio = np.clip(audio, -1, 1)
