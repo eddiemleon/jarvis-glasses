@@ -23,12 +23,13 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install torch==2.5.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cpu
-          pip install coqui-tts
+          pip install coqui-tts six
           sudo apt-get install -y ffmpeg >/dev/null
           pip list 2>/dev/null | grep -iE "^(torch|torchaudio|coqui-tts|transformers) "
       - name: Generar muestras
         working-directory: voz
         run: |
+          set -o pipefail
           python voz_jarvis.py --muestra muestra.wav \
             "Bienvenido de vuelta, señor Leon. Son las ocho y cuarto de la mañana y el oro abrió en dos mil seiscientos cincuenta dólares." \
             "Todos los sistemas en línea. Le escucho fuerte y claro, señor." \
