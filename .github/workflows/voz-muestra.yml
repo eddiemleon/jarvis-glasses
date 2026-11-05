@@ -1,0 +1,47 @@
+# Genera muestras de la voz clonada de Jarvis (XTTS-v2, uso personal no comercial) para escucharlas antes de instalar.
+name: Voz - muestras
+on:
+  push:
+    paths:
+      - 'voz/**'
+      - '.github/workflows/voz-muestra.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  muestra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      COQUI_TOS_AGREED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Instalar motor de voz (CPU)
+        run: |
+          pip install --upgrade pip
+          pip install torch==2.5.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+          pip install coqui-tts
+          sudo apt-get install -y ffmpeg >/dev/null
+          pip list 2>/dev/null | grep -iE "^(torch|torchaudio|coqui-tts|transformers) "
+      - name: Generar muestras
+        working-directory: voz
+        run: |
+          python voz_jarvis.py --muestra muestra.wav \
+            "Bienvenido de vuelta, señor Leon. Son las ocho y cuarto de la mañana y el oro abrió en dos mil seiscientos cincuenta dólares." \
+            "Todos los sistemas en línea. Le escucho fuerte y claro, señor." \
+            "Déjeme ver. Es una taza azul sobre la mesa de la cocina, junto al microondas." 2>&1 | tee voz.log
+      - name: Publicar muestras
+        if: always()
+        run: |
+          mkdir -p /tmp/out
+          for f in voz/muestra_*.wav; do [ -f "$f" ] && ffmpeg -v error -y -i "$f" -b:a 128k "/tmp/out/$(basename "${f%.wav}").mp3"; done
+          cp voz/voz.log /tmp/out/ 2>/dev/null || true
+          git config user.name "jarvis-ci"; git config user.email "ci@users.noreply.github.com"
+          git checkout -q --orphan voz-muestras
+          git rm -rqf --cached . >/dev/null 2>&1 || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp /tmp/out/* . 2>/dev/null || echo "sin muestras" > voz.log
+          git add -A && git commit -qm "muestras ${{ github.run_id }}" && git push -qf origin HEAD:voz-muestras
