@@ -119,6 +119,7 @@ def instalar_piper(base):
         return src
     except Exception:
         pass
+    run([sys.executable, "-m", "pip", "install", "-q", "scikit-build<1", "cmake", "ninja", "cython>=3,<4"])
     run([sys.executable, "-m", "pip", "install", "-q", "-e", f"{src}[train]"])
     run([sys.executable, "setup.py", "build_ext", "--inplace"], cwd=src)
     return src

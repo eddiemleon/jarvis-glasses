@@ -30,6 +30,7 @@ jobs:
         env:
           COQUI_TOS_AGREED: '1'
         run: |
+          set -o pipefail
           cp voz/referencia.wav voz/movil/
           python voz/movil/entrenar.py --salida /tmp/vm --prueba 2>&1 | tee /tmp/vm.log
       - name: Guardar resultado
