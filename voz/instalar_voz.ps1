@@ -113,7 +113,7 @@ sh.Environment("Process")("COQUI_TOS_AGREED") = "1"
 sh.Environment("Process")("HF_HUB_DISABLE_XET") = "1"
 sh.Environment("Process")("HF_HUB_DISABLE_SYMLINKS_WARNING") = "1"
 sh.CurrentDirectory = "$Dest"
-sh.Run "cmd /c ""$py"" ""$Dest\voz_jarvis.py"" --servidor >> ""$Dest\voz.log"" 2>&1", 0, False
+sh.Run "cmd /c """"$py"" ""$Dest\voz_jarvis.py"" --servidor >> ""$Dest\voz.log"" 2>&1""", 0, False
 "@ | Set-Content -Path $vbs -Encoding ASCII
 $startup = [Environment]::GetFolderPath('Startup')
 Copy-Item $vbs (Join-Path $startup 'Jarvis Voz.vbs') -Force
