@@ -22,6 +22,13 @@ function Paso($t) { Write-Host ''; Write-Host "==> $t" -ForegroundColor Cyan }
 function Ok($t)   { Write-Host "    OK  $t" -ForegroundColor Green }
 function Falla($t){ Write-Host "    ERROR  $t" -ForegroundColor Red; Stop-Transcript | Out-Null; if (-not $CI) { Read-Host 'Pulse Enter para cerrar' }; exit 1 }
 
+# Ejecuta un programa externo: sus avisos (stderr) no detienen el instalador; solo cuenta su codigo de salida.
+function Ejecutar([string]$exe, [string[]]$argumentos) {
+    $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { & $exe @argumentos 2>&1 | ForEach-Object { Write-Host "    $_" } } finally { $ErrorActionPreference = $prev }
+    return $LASTEXITCODE
+}
+
 function Bajar($url, $destino) {
     for ($i = 1; $i -le 3; $i++) {
         try { Invoke-WebRequest -Uri $url -OutFile $destino -UseBasicParsing; return } catch { Write-Host "    reintento $i : $($_.Exception.Message)"; Start-Sleep 3 }
@@ -41,7 +48,9 @@ Ok 'Aceptada'
 # ---------- 1. Tarjeta grafica ----------
 Paso 'Tarjeta grafica'
 $gpu = $false
+$prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
 try { $n = & nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>$null; if ($LASTEXITCODE -eq 0 -and $n) { $gpu = $true; Ok "NVIDIA: $n" } } catch {}
+$ErrorActionPreference = $prev
 if (-not $gpu) { Write-Host '    !!  Sin GPU NVIDIA: la voz funcionara, pero cada frase tardara varios segundos.' -ForegroundColor Yellow }
 
 # ---------- 2. Python 3.11 con uv ----------
@@ -55,17 +64,17 @@ if (-not (Test-Path $uv)) {
 }
 $venv = Join-Path $Dest 'venv'
 $py = Join-Path $venv 'Scripts\python.exe'
-if (-not (Test-Path $py)) { & $uv venv --python 3.11 $venv; if ($LASTEXITCODE) { Falla 'No pude crear el entorno de Python' } }
+if (-not (Test-Path $py)) { if (Ejecutar $uv @('venv', '--python', '3.11', $venv)) { Falla 'No pude crear el entorno de Python' } }
 Ok 'Python 3.11 listo'
 
 # ---------- 3. Motor de voz ----------
 Paso 'Motor de voz (descarga grande la primera vez, puede tardar 10-20 min)'
 $idx = if ($gpu) { 'https://download.pytorch.org/whl/cu124' } else { 'https://download.pytorch.org/whl/cpu' }
-& $uv pip install --python $py torch==2.6.0 torchaudio==2.6.0 --index-url $idx
-if ($LASTEXITCODE) { Falla 'No pude instalar PyTorch' }
-& $uv pip install --python $py coqui-tts six
-if ($LASTEXITCODE) { Falla 'No pude instalar el motor de voz' }
-$cuda = & $py -c "import torch;print(torch.cuda.is_available())"
+if (Ejecutar $uv @('pip', 'install', '--python', $py, 'torch==2.6.0', 'torchaudio==2.6.0', '--index-url', $idx)) { Falla 'No pude instalar PyTorch' }
+if (Ejecutar $uv @('pip', 'install', '--python', $py, 'coqui-tts', 'six')) { Falla 'No pude instalar el motor de voz' }
+$prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+$cuda = & $py -c "import torch;print(torch.cuda.is_available())" 2>$null
+$ErrorActionPreference = $prev
 Ok "Motor instalado (GPU activa: $cuda)"
 
 # ---------- 4. Archivos de la voz y conexion ----------
@@ -84,8 +93,8 @@ Ok 'Archivos y tunel seguro listos'
 Paso 'Prueba de voz'
 $env:COQUI_TOS_AGREED = '1'
 $prueba = Join-Path $Dest 'prueba.wav'
-& $py (Join-Path $Dest 'voz_jarvis.py') --muestra $prueba 'Instalacion completa. Todos los sistemas en linea, senor Leon.'
-if ($LASTEXITCODE -or -not (Test-Path $prueba)) { Falla 'La voz no pudo generar la prueba' }
+$code = Ejecutar $py @((Join-Path $Dest 'voz_jarvis.py'), '--muestra', $prueba, 'Instalacion completa. Todos los sistemas en linea, senor Leon.')
+if ($code -or -not (Test-Path $prueba)) { Falla 'La voz no pudo generar la prueba' }
 Ok 'Voz generada'
 if (-not $CI) { try { (New-Object Media.SoundPlayer $prueba).PlaySync() } catch {} }
 
