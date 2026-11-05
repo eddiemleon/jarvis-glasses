@@ -12,6 +12,7 @@ enum K {
     static let speechRate = "speechRate"
     static let listening = "listening"          // escucha de "Jarvis" activada
     static let locale = "locale"                // es-US, es-MX, es-ES...
+    static let localVoice = "localVoice"        // voz de Jarvis dentro del iPhone (modelo propio)
     static let liveQuality = "liveQuality"      // transmisión en vivo: "fluida" | "equilibrada" | "maxima"
 }
 
@@ -24,6 +25,7 @@ enum Settings {
             K.readWhatsApp: true,
             K.boostDB: 9.0,
             K.maxSystemVolume: true,
+            K.localVoice: true,
             K.speechRate: 0.52,
             K.listening: true,
             K.locale: "es-US",
@@ -37,6 +39,7 @@ enum Settings {
     static var readWhatsApp: Bool { d.bool(forKey: K.readWhatsApp) }
     static var boostDB: Float { Float(d.double(forKey: K.boostDB)) }
     static var maxSystemVolume: Bool { d.bool(forKey: K.maxSystemVolume) }
+    static var localVoice: Bool { d.bool(forKey: K.localVoice) }
     static var voiceID: String { d.string(forKey: K.voiceID) ?? "" }
     static var speechRate: Float { Float(d.double(forKey: K.speechRate)) }
     static var listening: Bool { d.bool(forKey: K.listening) }

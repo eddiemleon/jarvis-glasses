@@ -11,3 +11,5 @@ windows/Jarvis.ipa
 __pycache__/
 *.pyc
 voz/config.txt
+ios/Vendor/
+ios/VozJarvis/

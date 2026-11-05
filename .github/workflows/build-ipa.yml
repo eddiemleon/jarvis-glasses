@@ -26,6 +26,34 @@ jobs:
           xcrun simctl list devices available | grep -i iphone | head -5
       - name: Instalar XcodeGen
         run: brew install xcodegen
+      - name: Motor de voz local (sherpa-onnx) y modelo de la voz de Jarvis
+        working-directory: ios
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          V=v1.12.40   # última versión con espeak-ng (pronunciación en español)
+          mkdir -p Vendor && cd Vendor
+          curl -fsSL -o so.tar.bz2 "https://github.com/k2-fsa/sherpa-onnx/releases/download/$V/sherpa-onnx-$V-ios.tar.bz2"
+          tar xjf so.tar.bz2 && rm so.tar.bz2
+          # el archivo trae un enlace simbólico a la versión de onnxruntime: se reemplaza por la carpeta real
+          ORT=build-ios/ios-onnxruntime
+          if [ -L "$ORT/onnxruntime.xcframework" ]; then T=$(cd "$ORT" && readlink onnxruntime.xcframework); rm "$ORT/onnxruntime.xcframework"; cp -R "$ORT/$T" "$ORT/onnxruntime.xcframework"; fi
+          ls build-ios "$ORT/onnxruntime.xcframework"
+          cd ..
+          rm -rf VozJarvis && mkdir -p VozJarvis /tmp/vj
+          if gh release download voz-jarvis -p jarvis-voz.zip -D /tmp/vj 2>/dev/null; then
+            unzip -q /tmp/vj/jarvis-voz.zip -d VozJarvis
+            echo jarvis > VozJarvis/origen.txt
+          else
+            echo "Aún no hay voz de Jarvis entrenada: se usa un modelo de prueba solo para las pruebas automáticas."
+            curl -fsSL -o /tmp/vj/m.tar.bz2 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-es_ES-davefx-medium.tar.bz2
+            tar xjf /tmp/vj/m.tar.bz2 -C /tmp/vj
+            D=/tmp/vj/vits-piper-es_ES-davefx-medium
+            cp "$D"/*.onnx VozJarvis/jarvis.onnx; cp "$D/tokens.txt" VozJarvis/; cp -R "$D/espeak-ng-data" VozJarvis/
+            echo prueba > VozJarvis/origen.txt
+          fi
+          ls -la VozJarvis; du -sh VozJarvis
       - name: Generar proyecto
         working-directory: ios
         run: xcodegen generate

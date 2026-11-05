@@ -16,7 +16,11 @@ final class Speaker {
     /// El servidor ofrece voz neuronal (ElevenLabs).
     var remoteTTSAvailable = false
 
-    init(audio: AudioIO) { self.audio = audio }
+    init(audio: AudioIO) {
+        self.audio = audio
+        // La voz de Jarvis se carga al abrir la app: la primera frase sale sin espera.
+        if LocalVoice.enabled { Task.detached(priority: .utility) { LocalVoice.shared.load() } }
+    }
 
     var isIdle: Bool { queue.isEmpty && !speaking }
 
@@ -24,7 +28,10 @@ final class Speaker {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return }
         let remote = remoteTTSAvailable
+        let local = LocalVoice.enabled
         let task = Task.detached(priority: .userInitiated) { () -> [AVAudioPCMBuffer] in
+            // 1) Voz de Jarvis dentro del iPhone: instantánea, sin internet ni servidor.
+            if local, let b = LocalVoice.shared.render(clean), let c = AudioIO.Converter().convert(b) { return [c] }
             if remote, let r = await Speaker.renderRemote(clean), !r.isEmpty { return r }
             return await Speaker.renderSystem(clean)
         }

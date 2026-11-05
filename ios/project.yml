@@ -22,7 +22,15 @@ targets:
     platform: iOS
     sources:
       - path: Jarvis
+      - path: VozJarvis          # modelo de voz de Jarvis (lo coloca la compilación en la nube)
+        type: folder
+        buildPhase: resources
     dependencies:
+      - framework: Vendor/build-ios/sherpa-onnx.xcframework
+        embed: false
+      - framework: Vendor/build-ios/ios-onnxruntime/onnxruntime.xcframework
+        embed: false
+      - sdk: libc++.tbd
       - package: MetaWearables
         product: MWDATCore
       - package: MetaWearables
@@ -37,6 +45,8 @@ targets:
         INFOPLIST_FILE: Jarvis/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         DEVELOPMENT_TEAM: ""                              # o elige tu Team en Xcode > Signing & Capabilities
+        SWIFT_OBJC_BRIDGING_HEADER: Jarvis/Sherpa/Jarvis-Bridging-Header.h
+        HEADER_SEARCH_PATHS: $(PROJECT_DIR)/Vendor/build-ios/sherpa-onnx.xcframework/Headers
     entitlements:
       path: Jarvis/Jarvis.entitlements
       properties:
