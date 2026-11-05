@@ -6,7 +6,7 @@ import { hub } from './hub.js';
 import { store, snapshot, restore, setOnChange } from './store.js';
 import { runTurn, cancelCurrent, runBackground, historySnapshot, restoreHistory, onTurnDone } from './brain.js';
 import { verifySignature, parseIncoming, waEnabled } from './whatsapp.js';
-import { synthesize, ttsEnabled } from './tts.js';
+import { synthesize, ttsEnabled, registerPcVoice, ttsSource } from './tts.js';
 import { live, VIEWER_HTML, EXPIRED_HTML } from './live.js';
 import { usageSnapshot, providers, resolveBrains } from './llm.js';
 import { startReminderLoop } from './reminders.js';
@@ -27,6 +27,12 @@ if (!config.mock && !config.anthropicKey && !config.fallbacks.length) {
   console.error('Falta una clave de IA: ANTHROPIC_API_KEY (recomendada) o GEMINI_API_KEY / OPENAI_API_KEY / OPENROUTER_API_KEY / GROQ_API_KEY / OLLAMA_URL.');
   process.exit(1);
 }
+
+const readyMsg = () => ({
+  type: 'ready',
+  model: config.mock ? 'mock' : config.model,
+  features: { tts: ttsEnabled(), voice: ttsSource(), whatsapp: waEnabled(), webSearch: config.webSearch },
+});
 
 const sha = (s) => crypto.createHash('sha256').update(String(s)).digest();
 const safeEq = (a, b) => crypto.timingSafeEqual(sha(a), sha(b));
@@ -76,7 +82,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) {
-      return reply(res, 200, JSON.stringify({ ok: true, app: hub.connected, tts: ttsEnabled(), whatsapp: waEnabled(), brains: providers().map((p) => p.name + ':' + p.label), live: !!live.current }), 'application/json');
+      return reply(res, 200, JSON.stringify({ ok: true, app: hub.connected, tts: ttsEnabled(), voice: ttsSource(), whatsapp: waEnabled(), brains: providers().map((p) => p.name + ':' + p.label), live: !!live.current }), 'application/json');
     }
 
     if (req.method === 'GET' && url.pathname === '/setup') {
@@ -140,9 +146,18 @@ const server = http.createServer(async (req, res) => {
       if (!ttsEnabled()) return reply(res, 501, 'tts not configured');
       const { text } = JSON.parse((await readBody(req, 20_000)).toString('utf8') || '{}');
       if (!text) return reply(res, 400, 'text required');
-      const audio = await synthesize(String(text));
-      res.writeHead(200, { 'content-type': 'audio/mpeg', 'content-length': audio.length });
+      const { audio, type } = await synthesize(String(text));
+      res.writeHead(200, { 'content-type': type, 'content-length': audio.length });
       return res.end(audio);
+    }
+
+    // La PC del usuario avisa dónde está su voz propia (túnel seguro). Cada 5 min.
+    if (url.pathname === '/voice/register' && req.method === 'POST') {
+      if (!authed(req)) return reply(res, 401, 'unauthorized');
+      const { url: voiceUrl } = JSON.parse((await readBody(req, 5_000)).toString('utf8') || '{}');
+      const changed = registerPcVoice(voiceUrl);
+      if (changed) hub.send(readyMsg()); // la app se entera al instante: empieza a usar la voz propia
+      return reply(res, 200, JSON.stringify({ ok: true, source: ttsSource() }), 'application/json');
     }
 
     // Para atajos de iOS / automatizaciones: hace que Jarvis diga algo en las gafas.
@@ -201,13 +216,7 @@ server.on('upgrade', (req, socket, head) => {
             restoreHistory(m.restore.history);
             if (okState) log('memoria restaurada desde el iPhone');
           }
-          conn.send(
-            JSON.stringify({
-              type: 'ready',
-              model: config.mock ? 'mock' : config.model,
-              features: { tts: ttsEnabled(), whatsapp: waEnabled(), webSearch: config.webSearch },
-            })
-          );
+          conn.send(JSON.stringify(readyMsg()));
           const n = hub.flushQueue(conn);
           log('app conectada', n ? `(+${n} eventos en cola)` : '');
         } else conn.close(1008);

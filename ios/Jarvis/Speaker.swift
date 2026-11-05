@@ -140,13 +140,15 @@ final class Speaker {
         guard let base = Settings.httpBaseURL else { return nil }
         var req = URLRequest(url: base.appendingPathComponent("tts"))
         req.httpMethod = "POST"
-        req.timeoutInterval = 12
+        req.timeoutInterval = 15
         req.setValue("Bearer \(Settings.token)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["text": text])
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty else { return nil }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp3")
+              let http = resp as? HTTPURLResponse, http.statusCode == 200, !data.isEmpty else { return nil }
+        // La voz propia (PC) llega en WAV; ElevenLabs en MP3. iOS necesita la extensión correcta.
+        let isWav = (http.value(forHTTPHeaderField: "Content-Type") ?? "").contains("wav") || data.prefix(4) == Data("RIFF".utf8)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + (isWav ? ".wav" : ".mp3"))
         defer { try? FileManager.default.removeItem(at: url) }
         guard (try? data.write(to: url)) != nil, let file = try? AVAudioFile(forReading: url),
               let buf = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)),
