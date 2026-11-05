@@ -68,24 +68,41 @@ class Voz:
         return t[:600]
 
     @staticmethod
-    def trozos(t, maximo=220):
-        # XTTS rinde mejor con frases cortas: se corta por puntuación sin partir palabras.
+    def trozos(t, maximo=230):
+        # Se corta SOLO al final de cada oración (cortar en comas deja trozos cortos y el modelo
+        # rellena con silencios largos). Oraciones muy cortas se unen a la siguiente.
+        oraciones = [o for o in re.split(r"(?<=[.!?])\s+", t) if o.strip()]
         partes, actual = [], ""
-        for f in re.split(r"(?<=[.!?;:,])\s+", t):
-            if len(actual) + len(f) + 1 <= maximo:
-                actual = (actual + " " + f).strip()
+        for o in oraciones:
+            if not actual or len(actual) + len(o) + 1 <= maximo and len(actual) < 60:
+                actual = (actual + " " + o).strip()
             else:
-                if actual:
-                    partes.append(actual)
-                while len(f) > maximo:
-                    corte = f.rfind(" ", 0, maximo)
-                    corte = corte if corte > 40 else maximo
-                    partes.append(f[:corte])
-                    f = f[corte:].strip()
-                actual = f
+                partes.append(actual)
+                actual = o
         if actual:
             partes.append(actual)
-        return partes
+        final = []
+        for p in partes:  # una oración larguísima se parte en una coma cercana al medio
+            while len(p) > maximo:
+                corte = p.rfind(", ", 0, maximo)
+                corte = corte + 1 if corte > 60 else (p.rfind(" ", 0, maximo) if p.rfind(" ", 0, maximo) > 40 else maximo)
+                final.append(p[:corte].strip())
+                p = p[corte:].strip()
+            final.append(p)
+        return final
+
+    @staticmethod
+    def recortar(w, sr=SR, umbral=0.012, margen=0.06):
+        # Quita silencio sobrante al inicio y al final de cada trozo.
+        import numpy as np
+
+        v = np.abs(w)
+        idx = np.where(v > umbral)[0]
+        if not len(idx):
+            return w[:0]
+        a = max(0, idx[0] - int(sr * margen))
+        b = min(len(w), idx[-1] + int(sr * margen * 2))
+        return w[a:b]
 
     def decir(self, texto):
         import numpy as np
@@ -103,8 +120,8 @@ class Voz:
                 )
                 w = out["wav"]
                 w = w.cpu().numpy() if hasattr(w, "cpu") else np.asarray(w)
-                trozos.append(w)
-                trozos.append(np.zeros(int(SR * 0.12), dtype=np.float32))  # pausa natural
+                trozos.append(self.recortar(w.astype(np.float32)))
+                trozos.append(np.zeros(int(SR * 0.18), dtype=np.float32))  # pausa natural entre oraciones
         audio = np.concatenate(trozos) if trozos else np.zeros(1, dtype=np.float32)
         audio = np.clip(audio, -1, 1)
         pcm = (audio * 32767).astype("<i2").tobytes()
