@@ -58,8 +58,22 @@ class Voz:
             audio_path=[REF], gpt_cond_len=30, max_ref_length=60, sound_norm_refs=False
         )
         self.lock = threading.Lock()
+        self.diagnostico()
+        t0 = time.time()
         self.decir("Listo.")  # calentamiento
-        log("voz lista")
+        log(f"voz lista (calentamiento {time.time() - t0:.1f}s)")
+
+    def diagnostico(self):
+        t = self.torch
+        try:
+            dev = next(self.model.parameters()).device
+            info = f"torch {t.__version__}, cuda {t.version.cuda}, modelo en {dev}"
+            if t.cuda.is_available():
+                libre, total = t.cuda.mem_get_info()
+                info += f", GPU {t.cuda.get_device_name(0)}, VRAM libre {libre / 2**30:.1f}/{total / 2**30:.1f} GB"
+            log("diagnostico:", info)
+        except Exception as e:  # noqa: BLE001
+            log("diagnostico fallo:", e)
 
     @staticmethod
     def limpiar(texto):
@@ -106,7 +120,7 @@ class Voz:
         b = min(len(w), idx[-1] + int(sr * margen * 2))
         return w[a:b]
 
-    def decir(self, texto):
+    def decir(self, texto, llegada=None):
         import numpy as np
 
         t = self.limpiar(texto)
@@ -114,11 +128,15 @@ class Voz:
             return b""
         trozos = []
         with self.lock, self.torch.inference_mode():
+            # Si la frase esperó en cola más de 10 s, Jarvis ya contestó con la voz del iPhone: no se genera.
+            if llegada and time.time() - llegada > 10:
+                return None
             for parte in self.trozos(t):
                 # Duración esperada en español: ~0.075 s por carácter. Si sale mucho más larga, el modelo
                 # se "alargó" o balbuceó: se regenera con menos variación (hasta 2 intentos más).
                 limite = 0.11 * len(parte) + 1.2
                 for temp in (0.78, 0.62, 0.5):
+                    t1 = time.time()
                     out = self.model.inference(
                         parte, "es", self.gpt_latent, self.speaker_emb,
                         # Expresiva (al estilo Jarvis), con respaldo más estable si se desvía.
@@ -126,6 +144,7 @@ class Voz:
                         top_k=60, top_p=0.9, speed=1.03, enable_text_splitting=False,
                     )
                     w = out["wav"]
+                    log(f"  trozo {len(parte)} letras en {time.time() - t1:.1f}s (temp {temp})")
                     w = w.cpu().numpy() if hasattr(w, "cpu") else np.asarray(w)
                     w = self.recortar(w.astype(np.float32))
                     if len(w) / SR <= limite:
@@ -173,7 +192,12 @@ def servir(voz, token):
             try:
                 texto = json.loads(self.rfile.read(min(n, 20000)) or b"{}").get("text", "")
                 t0 = time.time()
-                audio = voz.decir(texto)
+                audio = voz.decir(texto, llegada=t0)
+                if audio is None:
+                    log(f"frase descartada (esperó demasiado): {texto[:60]}")
+                    self.send_response(503)
+                    self.end_headers()
+                    return
                 log(f"frase en {time.time() - t0:.2f}s: {texto[:60]}")
                 self.send_response(200)
                 self.send_header("content-type", "audio/wav")
