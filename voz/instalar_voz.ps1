@@ -92,6 +92,10 @@ Ok 'Archivos y tunel seguro listos'
 # ---------- 5. Primera prueba (descarga el modelo ~1.8 GB) ----------
 Paso 'Prueba de voz'
 $env:COQUI_TOS_AGREED = '1'
+# El descargador nuevo de Hugging Face (xet) puede quedarse congelado en un bloque: se usa el clásico, que reanuda.
+$env:HF_HUB_DISABLE_XET = '1'
+$env:HF_HUB_DISABLE_SYMLINKS_WARNING = '1'
+$env:HF_HUB_DOWNLOAD_TIMEOUT = '60'
 $prueba = Join-Path $Dest 'prueba.wav'
 $code = Ejecutar $py @((Join-Path $Dest 'voz_jarvis.py'), '--muestra', $prueba, 'Instalacion completa. Todos los sistemas en linea, senor Leon.')
 if ($code -or -not (Test-Path $prueba)) { Falla 'La voz no pudo generar la prueba' }
@@ -106,6 +110,8 @@ $vbs = Join-Path $Dest 'iniciar_voz.vbs'
 @"
 Set sh = CreateObject("WScript.Shell")
 sh.Environment("Process")("COQUI_TOS_AGREED") = "1"
+sh.Environment("Process")("HF_HUB_DISABLE_XET") = "1"
+sh.Environment("Process")("HF_HUB_DISABLE_SYMLINKS_WARNING") = "1"
 sh.CurrentDirectory = "$Dest"
 sh.Run "cmd /c ""$py"" ""$Dest\voz_jarvis.py"" --servidor >> ""$Dest\voz.log"" 2>&1", 0, False
 "@ | Set-Content -Path $vbs -Encoding ASCII
