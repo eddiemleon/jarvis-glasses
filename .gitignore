@@ -8,3 +8,6 @@ ios/build/
 xcuserdata/
 *.xcuserstate
 windows/Jarvis.ipa
+__pycache__/
+*.pyc
+voz/config.txt

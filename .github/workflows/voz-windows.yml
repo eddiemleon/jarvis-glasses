@@ -1,0 +1,47 @@
+# Prueba real del instalador de la voz en Windows (sin GPU: valida instalación, modelo y servidor de voz).
+name: Voz - instalador Windows
+on:
+  push:
+    paths:
+      - 'voz/instalar_voz.ps1'
+      - '.github/workflows/voz-windows.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar la voz con instalar_voz.ps1
+        shell: powershell
+        run: |
+          "JARVIS_URL=http://127.0.0.1:9`nJARVIS_TOKEN=ci-token-0123456789abcdef" | Set-Content voz\config.txt
+          powershell -NoProfile -ExecutionPolicy Bypass -File voz\instalar_voz.ps1 -CI *>&1 | Tee-Object -FilePath win-voz.log
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Servidor de voz responde
+        shell: powershell
+        run: |
+          $d = "$env:LOCALAPPDATA\JarvisVoz"; $env:COQUI_TOS_AGREED = '1'
+          $p = Start-Process "$d\venv\Scripts\python.exe" -ArgumentList "-c `"import sys;sys.argv=['x'];import runpy;m=runpy.run_path(r'$d\voz_jarvis.py');v=m['Voz']();m['servir'](v,'ci-token-0123456789abcdef');import time;time.sleep(600)`"" -PassThru -RedirectStandardOutput srv.log -RedirectStandardError srv.err
+          $ok = $false
+          for ($i=0; $i -lt 60; $i++) { Start-Sleep 5; try { Invoke-WebRequest http://127.0.0.1:8765/health -UseBasicParsing | Out-Null; $ok=$true; break } catch {} }
+          if (-not $ok) { Get-Content srv.log, srv.err -ErrorAction SilentlyContinue | Select-Object -Last 30; exit 1 }
+          $t0 = Get-Date
+          Invoke-WebRequest http://127.0.0.1:8765/tts -Method POST -Headers @{Authorization='Bearer ci-token-0123456789abcdef'} -ContentType 'application/json' -Body '{"text":"Prueba del servidor de voz, señor."}' -OutFile tts.wav -UseBasicParsing
+          "TTS: $((Get-Item tts.wav).Length) bytes en $([int]((Get-Date)-$t0).TotalSeconds) s (CPU)" | Tee-Object -FilePath win-voz.log -Append
+          $bad = try { Invoke-WebRequest http://127.0.0.1:8765/tts -Method POST -Body '{}' -UseBasicParsing; 'sin auth OK?!' } catch { 'sin contraseña: rechazado' }
+          $bad | Tee-Object -FilePath win-voz.log -Append
+          Stop-Process -Id $p.Id -Force
+      - name: Publicar informe
+        if: always()
+        shell: bash
+        run: |
+          cp win-voz.log /tmp/r.txt 2>/dev/null || echo "sin log" > /tmp/r.txt
+          git config user.name "jarvis-ci"; git config user.email "ci@users.noreply.github.com"
+          git checkout -q --orphan voz-win-report
+          git rm -rqf --cached . >/dev/null 2>&1 || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp /tmp/r.txt report.txt
+          git add report.txt && git commit -qm "voz windows ${{ github.run_id }}" && git push -qf origin HEAD:voz-win-report || true
