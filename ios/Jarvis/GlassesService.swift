@@ -321,7 +321,7 @@ final class GlassesService: ObservableObject {
                 group.cancelAll()
                 return first
             }
-            guard found else { throw GlassesError.noSession }
+            guard found else { throw GlassesError.session(Self.deviceReport()) }
         }
         let s: DeviceSession
         do { s = try Wearables.shared.createSession(deviceSelector: selector) }
@@ -378,6 +378,28 @@ final class GlassesService: ObservableObject {
             self?.session?.stop()
             self?.session = nil
         }
+    }
+
+    /// Qué gafas ve el kit de Meta y en qué estado están (para saber por qué no hay cámara).
+    static func deviceReport() -> String {
+        let ids = Wearables.shared.devices
+        guard !ids.isEmpty else {
+            return "el kit de Meta no ve ningunas gafas vinculadas a Jarvis. En Meta AI verifique que las gafas estén conectadas y con Modo desarrollador activo; luego en Jarvis → Ajustes toque Registrar con Meta AI otra vez."
+        }
+        var parts: [String] = []
+        for id in ids {
+            guard let d = Wearables.shared.deviceForIdentifier(id) else { continue }
+            var p = "\(d.nameOrId()): conexión \(d.linkState), compatibilidad \(d.compatibility()), puestas \(d.donState), patillas \(d.hingeState)"
+            switch d.compatibility() {
+            case .deviceUpdateRequired: p += " → actualice el software de las gafas en Meta AI"
+            case .sdkUpdateRequired: p += " → esta app necesita una versión más nueva del kit de Meta"
+            default: break
+            }
+            if d.linkState != .connected { p += " → las gafas no están conectadas al kit (abra Meta AI con las gafas encendidas)" }
+            if d.hingeState == .closed { p += " → abra las patillas" }
+            parts.append(p)
+        }
+        return parts.isEmpty ? "el kit lista \(ids.count) dispositivo(s) pero sin datos" : parts.joined(separator: " | ")
     }
 
     /// Traduce los errores del kit de Meta a instrucciones claras.
