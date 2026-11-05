@@ -115,8 +115,9 @@ class Voz:
             for parte in self.trozos(t):
                 out = self.model.inference(
                     parte, "es", self.gpt_latent, self.speaker_emb,
-                    temperature=0.65, length_penalty=1.0, repetition_penalty=5.0,
-                    top_k=50, top_p=0.85, speed=1.0, enable_text_splitting=False,
+                    # Más expresiva (al estilo Jarvis): algo más de variación en tono y ritmo, sin perder claridad.
+                    temperature=0.78, length_penalty=1.0, repetition_penalty=4.0,
+                    top_k=60, top_p=0.9, speed=1.03, enable_text_splitting=False,
                 )
                 w = out["wav"]
                 w = w.cpu().numpy() if hasattr(w, "cpu") else np.asarray(w)

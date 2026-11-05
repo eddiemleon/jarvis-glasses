@@ -31,9 +31,9 @@ jobs:
         run: |
           set -o pipefail
           python voz_jarvis.py --muestra muestra.wav \
-            "Bienvenido de vuelta, señor Leon. Son las ocho y cuarto de la mañana y el oro abrió en dos mil seiscientos cincuenta dólares." \
-            "Todos los sistemas en línea. Le escucho fuerte y claro, señor." \
-            "Déjeme ver. Es una taza azul sobre la mesa de la cocina, junto al microondas." 2>&1 | tee voz.log
+            "Bienvenido de vuelta, señor Leon. ¿Una noche larga? Le tengo café... figurativamente hablando." \
+            "¡Excelente, señor! El oro tocó su objetivo. Ganancia asegurada... y sin despeinarse." \
+            "Señor, me temo que su stop está demasiado cerca. Le recomiendo cautela." 2>&1 | tee voz.log
       - name: Publicar muestras
         if: always()
         run: |
