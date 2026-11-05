@@ -122,6 +122,16 @@ def instalar_piper(base):
     run([sys.executable, "-m", "pip", "install", "-q", "scikit-build<1", "cmake", "ninja", "cython>=3,<4"])
     run([sys.executable, "-m", "pip", "install", "-q", "-e", f"{src}[train]"])
     run([sys.executable, "setup.py", "build_ext", "--inplace"], cwd=src)
+    # Extensión de alineación (Cython) que el entrenamiento necesita: ver build_monotonic_align.sh de Piper.
+    ma = src / "src" / "piper" / "train" / "vits" / "monotonic_align"
+    (ma / "monotonic_align").mkdir(exist_ok=True)
+    run([sys.executable, "-m", "cython", "-3", "core.pyx"], cwd=ma)
+    run([sys.executable, "-c", "from setuptools import setup, Extension; import numpy; "
+         "setup(ext_modules=[Extension('core', ['core.c'], include_dirs=[numpy.get_include()])], script_args=['build_ext', '--inplace'])"], cwd=ma)
+    for so in ma.glob("core*.so"):
+        shutil.move(str(so), ma / "monotonic_align" / so.name)
+    for so in ma.glob("core*.pyd"):
+        shutil.move(str(so), ma / "monotonic_align" / so.name)
     return src
 
 
