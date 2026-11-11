@@ -52,8 +52,8 @@ struct SettingsTab: View {
                         Slider(value: $boostDB, in: 0...18, step: 1)
                     }
                     Toggle("Subir volumen del iPhone al máximo al hablar", isOn: $maxVolume)
-                    Toggle("No interrumpir mi música o videos", isOn: $musicFirst)
-                    Text("Mientras suena música o un video de otra app (YouTube, Brave…), Jarvis no usa el micrófono de las gafas para no pausarla ni bajarle la calidad: escucha por el micrófono del iPhone. Al parar la música, vuelve solo al micrófono de las gafas.")
+                    Toggle("Música y videos sin interrupciones", isOn: $musicFirst)
+                    Text("Encendido: el micrófono queda activo SIEMPRE en el iPhone y la música o los videos de otras apps (YouTube, Brave…) nunca se pausan ni pierden calidad. Apagado: el micrófono queda activo SIEMPRE en las gafas, pero el audio de otras apps se interrumpe (limitación del Bluetooth).")
                         .font(.footnote).foregroundStyle(.secondary)
                     Button("Probar voz") { model.testVoice() }
                     Text("El límite de volumen de fábrica de las gafas no se puede saltar. Esto sube el nivel dentro de ese límite: el volumen máximo del sistema más ganancia con limitador anti-distorsión.")

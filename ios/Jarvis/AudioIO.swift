@@ -26,9 +26,7 @@ final class AudioIO: NSObject {
     /// micrófono del iPhone y vuelve solo al micrófono de las gafas cuando la música lleva un rato detenida.
     private(set) var musicMode = false
     private var running = false
-    private var lastOtherAudio = Date.distantPast
     private var musicTimer: DispatchSourceTimer?
-    private static let musicHold: TimeInterval = 45   // sin música este tiempo -> vuelve al micrófono de las gafas
 
     override init() {
         let desc = AudioComponentDescription(
@@ -58,16 +56,12 @@ final class AudioIO: NSObject {
         musicTimer = t
     }
 
-    /// Decide el modo según si otra app está sonando. Con histéresis para no ir y venir.
+    /// Modo FIJO (sin cambios automáticos): el micrófono queda activo siempre en el mismo dispositivo.
+    /// Solo cambia si el usuario mueve el interruptor en Ajustes.
     private func checkOtherAudio() {
-        guard running, Settings.musicFirst else {
-            if musicMode && running { musicMode = false; rebuild(); onRouteChanged?() }
-            return
-        }
-        if AVAudioSession.sharedInstance().isOtherAudioPlaying { lastOtherAudio = Date() }
-        let want = Date().timeIntervalSince(lastOtherAudio) < Self.musicHold
-        guard want != musicMode else { return }
-        if !want && player.isPlaying { return }   // no cambiar de ruta mientras Jarvis habla
+        guard running else { return }
+        let want = Settings.musicFirst
+        guard want != musicMode, !player.isPlaying else { return }
         musicMode = want
         rebuild()
         onRouteChanged?()
@@ -77,7 +71,7 @@ final class AudioIO: NSObject {
 
     func configureSession() throws {
         let s = AVAudioSession.sharedInstance()
-        if Settings.musicFirst && !musicMode && s.isOtherAudioPlaying { musicMode = true; lastOtherAudio = Date() }
+        musicMode = Settings.musicFirst
         if musicMode {
             // Sin HFP: las gafas siguen en alta calidad (A2DP) y la otra app no se interrumpe. Micrófono: el del iPhone.
             try s.setCategory(.playAndRecord, mode: .default,
