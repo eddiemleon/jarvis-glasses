@@ -8,6 +8,7 @@ enum K {
     static let readWhatsApp = "readWhatsApp"    // leer en voz alta el texto de los WhatsApp
     static let boostDB = "boostDB"              // refuerzo de volumen (dB) de la voz de Jarvis
     static let maxSystemVolume = "maxSystemVolume"
+    static let musicFirst = "musicFirst"        // no interrumpir música/video de otras apps
     static let voiceID = "voiceID"              // identificador de AVSpeechSynthesisVoice
     static let speechRate = "speechRate"
     static let listening = "listening"          // escucha de "Jarvis" activada
@@ -25,6 +26,7 @@ enum Settings {
             K.readWhatsApp: true,
             K.boostDB: 9.0,
             K.maxSystemVolume: true,
+            K.musicFirst: true,
             K.localVoice: true,
             K.speechRate: 0.52,
             K.listening: true,
@@ -39,6 +41,7 @@ enum Settings {
     static var readWhatsApp: Bool { d.bool(forKey: K.readWhatsApp) }
     static var boostDB: Float { Float(d.double(forKey: K.boostDB)) }
     static var maxSystemVolume: Bool { d.bool(forKey: K.maxSystemVolume) }
+    static var musicFirst: Bool { d.bool(forKey: K.musicFirst) }
     static var localVoice: Bool { d.bool(forKey: K.localVoice) }
     static var voiceID: String { d.string(forKey: K.voiceID) ?? "" }
     static var speechRate: Float { Float(d.double(forKey: K.speechRate)) }

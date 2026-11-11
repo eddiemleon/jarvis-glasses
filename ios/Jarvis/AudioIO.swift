@@ -21,6 +21,15 @@ final class AudioIO: NSObject {
     /// Cambió la ruta o hubo una interrupción: el dueño debe reaccionar (p. ej. reiniciar el reconocimiento).
     var onRouteChanged: (@Sendable () -> Void)?
 
+    /// MODO MÚSICA: mientras otra app reproduce audio (YouTube en Brave, etc.), Jarvis NO pone las gafas en
+    /// "modo llamada" (HFP). Así la música o el video no se pausa ni baja de calidad; Jarvis escucha por el
+    /// micrófono del iPhone y vuelve solo al micrófono de las gafas cuando la música lleva un rato detenida.
+    private(set) var musicMode = false
+    private var running = false
+    private var lastOtherAudio = Date.distantPast
+    private var musicTimer: DispatchSourceTimer?
+    private static let musicHold: TimeInterval = 45   // sin música este tiempo -> vuelve al micrófono de las gafas
+
     override init() {
         let desc = AudioComponentDescription(
             componentType: kAudioUnitType_Effect,
@@ -41,12 +50,41 @@ final class AudioIO: NSObject {
         nc.addObserver(self, selector: #selector(interruption(_:)), name: AVAudioSession.interruptionNotification, object: nil)
         nc.addObserver(self, selector: #selector(engineConfigChanged), name: .AVAudioEngineConfigurationChange, object: engine)
         nc.addObserver(self, selector: #selector(mediaReset), name: AVAudioSession.mediaServicesWereResetNotification, object: nil)
+
+        let t = DispatchSource.makeTimerSource(queue: .main)
+        t.schedule(deadline: .now() + 2, repeating: 2)
+        t.setEventHandler { [weak self] in self?.checkOtherAudio() }
+        t.resume()
+        musicTimer = t
+    }
+
+    /// Decide el modo según si otra app está sonando. Con histéresis para no ir y venir.
+    private func checkOtherAudio() {
+        guard running, Settings.musicFirst else {
+            if musicMode && running { musicMode = false; rebuild(); onRouteChanged?() }
+            return
+        }
+        if AVAudioSession.sharedInstance().isOtherAudioPlaying { lastOtherAudio = Date() }
+        let want = Date().timeIntervalSince(lastOtherAudio) < Self.musicHold
+        guard want != musicMode else { return }
+        if !want && player.isPlaying { return }   // no cambiar de ruta mientras Jarvis habla
+        musicMode = want
+        rebuild()
+        onRouteChanged?()
     }
 
     // MARK: Sesión
 
     func configureSession() throws {
         let s = AVAudioSession.sharedInstance()
+        if Settings.musicFirst && !musicMode && s.isOtherAudioPlaying { musicMode = true; lastOtherAudio = Date() }
+        if musicMode {
+            // Sin HFP: las gafas siguen en alta calidad (A2DP) y la otra app no se interrumpe. Micrófono: el del iPhone.
+            try s.setCategory(.playAndRecord, mode: .default,
+                              options: [.allowBluetoothA2DP, .defaultToSpeaker, .mixWithOthers])
+            try s.setActive(true, options: [])
+            return
+        }
         // .allowBluetooth = perfil HFP: único modo en que iOS usa el micrófono de las gafas.
         try s.setCategory(.playAndRecord, mode: .default,
                           options: [.allowBluetooth, .defaultToSpeaker, .mixWithOthers])
@@ -56,6 +94,7 @@ final class AudioIO: NSObject {
 
     /// Prefiere el micrófono Bluetooth de las gafas (si hay varios, el que diga Meta / Ray-Ban).
     func preferGlassesInput() {
+        if musicMode { return }
         let s = AVAudioSession.sharedInstance()
         let hfp = (s.availableInputs ?? []).filter { $0.portType == .bluetoothHFP }
         let pick = hfp.first { $0.portName.localizedCaseInsensitiveContains("ray-ban") || $0.portName.localizedCaseInsensitiveContains("meta") } ?? hfp.first
@@ -69,6 +108,7 @@ final class AudioIO: NSObject {
     // MARK: Motor
 
     func start() throws {
+        running = true
         try configureSession()
         if !tapInstalled {
             let input = engine.inputNode
@@ -100,6 +140,7 @@ final class AudioIO: NSObject {
     }
 
     func stop() {
+        running = false
         player.stop()
         if tapInstalled {
             engine.inputNode.removeTap(onBus: 0)

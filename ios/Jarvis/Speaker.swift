@@ -53,7 +53,8 @@ final class Speaker {
     private func startWorker() {
         guard worker == nil else { return }
         if !speaking { speaking = true; onSpeakingChanged?(true) }
-        if Settings.maxSystemVolume { SystemVolume.set(1.0) }
+        // Con música sonando no se toca el volumen del iPhone (reventaría la música).
+        if Settings.maxSystemVolume && !audio.musicMode { SystemVolume.set(1.0) }
         audio.setBoost(dB: Settings.boostDB)
         worker = Task { [weak self] in
             while let self, !Task.isCancelled, !self.queue.isEmpty {

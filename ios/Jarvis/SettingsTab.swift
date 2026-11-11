@@ -11,6 +11,7 @@ struct SettingsTab: View {
     @AppStorage(K.readWhatsApp) private var readWA = true
     @AppStorage(K.boostDB) private var boostDB = 9.0
     @AppStorage(K.maxSystemVolume) private var maxVolume = true
+    @AppStorage(K.musicFirst) private var musicFirst = true
     @AppStorage(K.voiceID) private var voiceID = ""
     @AppStorage(K.speechRate) private var rate = 0.52
     @AppStorage(K.locale) private var locale = "es-US"
@@ -51,6 +52,9 @@ struct SettingsTab: View {
                         Slider(value: $boostDB, in: 0...18, step: 1)
                     }
                     Toggle("Subir volumen del iPhone al máximo al hablar", isOn: $maxVolume)
+                    Toggle("No interrumpir mi música o videos", isOn: $musicFirst)
+                    Text("Mientras suena música o un video de otra app (YouTube, Brave…), Jarvis no usa el micrófono de las gafas para no pausarla ni bajarle la calidad: escucha por el micrófono del iPhone. Al parar la música, vuelve solo al micrófono de las gafas.")
+                        .font(.footnote).foregroundStyle(.secondary)
                     Button("Probar voz") { model.testVoice() }
                     Text("El límite de volumen de fábrica de las gafas no se puede saltar. Esto sube el nivel dentro de ese límite: el volumen máximo del sistema más ganancia con limitador anti-distorsión.")
                         .font(.footnote).foregroundStyle(.secondary)
