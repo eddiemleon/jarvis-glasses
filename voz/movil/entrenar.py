@@ -113,6 +113,13 @@ def instalar_piper(base):
     if not (src / "src" / "piper" / "train").exists():
         run(["git", "clone", "-q", "https://github.com/OHF-Voice/piper1-gpl", src])
         run(["git", "-C", src, "checkout", "-q", PIPER_COMMIT])
+    # Sin medidor MOS (no se usa): se quita su guardado, que si no detiene el entrenamiento.
+    import re as _re
+    mp = src / "src" / "piper" / "train" / "__main__.py"
+    txt = mp.read_text(encoding="utf-8")
+    txt2 = _re.sub(r'        ModelCheckpoint\(\n            monitor="val_mos",.*?\n        \),\n', "", txt, flags=_re.S)
+    if txt2 != txt:
+        mp.write_text(txt2, encoding="utf-8")
     try:
         import piper.train  # noqa: F401
         from piper.train.vits import monotonic_align  # noqa: F401
