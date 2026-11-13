@@ -26,6 +26,11 @@ final class AudioIO: NSObject {
     /// micrófono del iPhone y vuelve solo al micrófono de las gafas cuando la música lleva un rato detenida.
     private(set) var musicMode = false
     private var running = false
+    /// Opciones con las que quedó configurada la sesión: no se vuelve a tocar si no cambian
+    /// (reconfigurarla corta por un instante el audio de las demás apps).
+    private var sessionOptions: AVAudioSession.CategoryOptions?
+    private var lastRebuild = Date.distantPast
+    private var rebuildPending = false
     private var musicTimer: DispatchSourceTimer?
 
     override init() {
@@ -62,27 +67,23 @@ final class AudioIO: NSObject {
         guard running else { return }
         let want = Settings.musicFirst
         guard want != musicMode, !player.isPlaying else { return }
-        musicMode = want
-        rebuild()
-        onRouteChanged?()
+        rebuild(resetSession: true)   // start() aplica el modo nuevo
     }
 
     // MARK: Sesión
 
-    func configureSession() throws {
+    func configureSession(force: Bool = false) throws {
         let s = AVAudioSession.sharedInstance()
         musicMode = Settings.musicFirst
-        if musicMode {
-            // Sin HFP: las gafas siguen en alta calidad (A2DP) y la otra app no se interrumpe. Micrófono: el del iPhone.
-            try s.setCategory(.playAndRecord, mode: .default,
-                              options: [.allowBluetoothA2DP, .defaultToSpeaker, .mixWithOthers])
-            try s.setActive(true, options: [])
-            return
-        }
-        // .allowBluetooth = perfil HFP: único modo en que iOS usa el micrófono de las gafas.
-        try s.setCategory(.playAndRecord, mode: .default,
-                          options: [.allowBluetooth, .defaultToSpeaker, .mixWithOthers])
+        // Con música: sin HFP; las gafas siguen en alta calidad (A2DP) y la otra app no se interrumpe (micrófono del iPhone).
+        // Sin música: .allowBluetooth = perfil HFP, único modo en que iOS usa el micrófono de las gafas.
+        let opts: AVAudioSession.CategoryOptions = musicMode
+            ? [.allowBluetoothA2DP, .defaultToSpeaker, .mixWithOthers]
+            : [.allowBluetooth, .defaultToSpeaker, .mixWithOthers]
+        if !force, sessionOptions == opts { return }   // ya está: no tocarla
+        try s.setCategory(.playAndRecord, mode: .default, options: opts)
         try s.setActive(true, options: [])
+        sessionOptions = opts
         preferGlassesInput()
     }
 
@@ -92,7 +93,8 @@ final class AudioIO: NSObject {
         let s = AVAudioSession.sharedInstance()
         let hfp = (s.availableInputs ?? []).filter { $0.portType == .bluetoothHFP }
         let pick = hfp.first { $0.portName.localizedCaseInsensitiveContains("ray-ban") || $0.portName.localizedCaseInsensitiveContains("meta") } ?? hfp.first
-        if let pick { try? s.setPreferredInput(pick) }
+        // Solo si hace falta: pedirlo de nuevo provoca otro cambio de ruta (y un corte de audio).
+        if let pick, s.currentRoute.inputs.first?.uid != pick.uid { try? s.setPreferredInput(pick) }
     }
 
     var inputName: String { AVAudioSession.sharedInstance().currentRoute.inputs.first?.portName ?? "—" }
@@ -123,18 +125,32 @@ final class AudioIO: NSObject {
         }
     }
 
-    func rebuild() {
-        if tapInstalled {
-            engine.inputNode.removeTap(onBus: 0)
-            player.removeTap(onBus: 0)
-            tapInstalled = false
+    /// Reinicia el motor de audio. Peticiones seguidas se juntan en una sola y nunca más de una cada 2 s:
+    /// cada reinicio corta un instante el audio de las demás apps.
+    func rebuild(resetSession: Bool = false) {
+        if resetSession { sessionOptions = nil }
+        guard running, !rebuildPending else { return }
+        rebuildPending = true
+        let wait = max(0.3, 2.0 - Date().timeIntervalSince(lastRebuild))
+        DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
+            guard let self else { return }
+            self.rebuildPending = false
+            guard self.running else { return }
+            self.lastRebuild = Date()
+            if self.tapInstalled {
+                self.engine.inputNode.removeTap(onBus: 0)
+                self.player.removeTap(onBus: 0)
+                self.tapInstalled = false
+            }
+            self.engine.stop()
+            try? self.start()
+            self.onRouteChanged?()
         }
-        engine.stop()
-        try? start()
     }
 
     func stop() {
         running = false
+        sessionOptions = nil
         player.stop()
         if tapInstalled {
             engine.inputNode.removeTap(onBus: 0)
@@ -232,22 +248,27 @@ final class AudioIO: NSObject {
     // MARK: Notificaciones
 
     @objc private func routeChanged(_ n: Notification) {
-        preferGlassesInput()
-        onRouteChanged?()
+        // Solo interesa cuando se conecta o desconecta un dispositivo (las gafas). Los demás avisos los
+        // provoca la propia app al configurar el audio y reaccionar a ellos crearía un bucle.
+        let raw = n.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0
+        let reason = AVAudioSession.RouteChangeReason(rawValue: raw) ?? .unknown
+        guard reason == .newDeviceAvailable || reason == .oldDeviceUnavailable else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.preferGlassesInput()
+            self?.onRouteChanged?()
+        }
     }
     @objc private func interruption(_ n: Notification) {
         guard let raw = n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
               let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
-        if type == .ended { rebuild(); onRouteChanged?() }
+        if type == .ended { DispatchQueue.main.async { [weak self] in self?.rebuild(resetSession: true) } }
     }
     @objc private func engineConfigChanged() {
         // Al conectarse/desconectarse el Bluetooth cambia el formato de entrada: hay que reinstalar el tap.
-        rebuild()
-        onRouteChanged?()
+        DispatchQueue.main.async { [weak self] in self?.rebuild() }
     }
     @objc private func mediaReset() {
-        rebuild()
-        onRouteChanged?()
+        DispatchQueue.main.async { [weak self] in self?.rebuild(resetSession: true) }
     }
 }
 
