@@ -3,6 +3,7 @@ Muestras de la voz de Jarvis con 3 emociones (XTTS-v2, uso personal no comercial
 Corre en la PC con la voz ya instalada. Resultado: Descargas\\Jarvis\\muestras\\*.wav
 """
 import os
+import re
 import sys
 import time
 import wave
@@ -21,6 +22,26 @@ MUESTRAS = [
     ("2_entusiasta", "¡Excelente, señor! El oro tocó su objetivo. Ganancia asegurada, y sin despeinarse. Debo admitir que estoy impresionado.", 0.85, 1.05),
     ("3_seria", "Señor, con todo respeto, ese stop está demasiado cerca. Le recomiendo cautela. No me gustaría verlo perder lo que tanto le ha costado.", 0.65, 0.96),
 ]
+
+
+def acortar_pausas(w, umbral=0.012, maximo=0.32):
+    """Deja cualquier silencio interno en máximo 0.32 s (sin cortar la voz)."""
+    import numpy as np
+
+    v = np.abs(w) > umbral
+    ven = int(SR * 0.02)
+    act = np.convolve(v.astype(np.float32), np.ones(ven), "same") > 0
+    out, i, n = [], 0, len(w)
+    while i < n:
+        j = i
+        while j < n and act[j] == act[i]:
+            j += 1
+        seg = w[i:j]
+        if not act[i] and (j - i) > SR * maximo:
+            seg = seg[: int(SR * maximo)]
+        out.append(seg)
+        i = j
+    return np.concatenate(out) if out else w
 
 
 def log(*a):
@@ -44,20 +65,23 @@ def main():
         t0 = time.time()
         trozos = []
         with torch.inference_mode():
-            for parte in Voz.trozos(Voz.limpiar(texto)):
-                limite = 0.11 * len(parte) + 1.4
-                mejor = None
-                for t in (temp, max(0.5, temp - 0.15), 0.5):
+            # Una oración a la vez: XTTS "balbucea" o rellena con silencios cuando junta oraciones cortas.
+            for parte in [o for o in re.split(r"(?<=[.!?])\s+", Voz.limpiar(texto)) if o.strip()]:
+                esperado = 0.068 * len(parte) / vel + 0.4
+                candidatos = []
+                for t in (temp, temp, max(0.5, temp - 0.12)):
                     o = model.inference(parte, "es", lat, emb, temperature=t, length_penalty=1.0,
                                         repetition_penalty=4.0 if t > 0.7 else 6.0, top_k=60, top_p=0.9,
                                         speed=vel, enable_text_splitting=False)["wav"]
                     o = o.cpu().numpy() if hasattr(o, "cpu") else np.asarray(o)
-                    o = Voz.recortar(o.astype(np.float32))
-                    mejor = o
-                    if len(o) / SR <= limite:
+                    o = acortar_pausas(Voz.recortar(o.astype(np.float32)))
+                    dur = len(o) / SR
+                    candidatos.append((abs(dur - esperado) / esperado, o))
+                    if 0.75 * esperado <= dur <= 1.3 * esperado:
                         break
-                    log(f"  {nombre}: trozo largo ({len(o) / SR:.1f}s), repitiendo")
-                trozos += [mejor, np.zeros(int(SR * 0.2), dtype=np.float32)]
+                    log(f"  {nombre}: '{parte[:30]}' duró {dur:.1f}s (esperado {esperado:.1f}s), repitiendo")
+                mejor = min(candidatos, key=lambda c: c[0])[1]
+                trozos += [mejor, np.zeros(int(SR * 0.28), dtype=np.float32)]
         a = np.concatenate(trozos)
         # Volumen parejo y algo de presencia: nivel RMS fijo y picos limitados.
         rms = float(np.sqrt(np.mean(a ** 2)) + 1e-9)
