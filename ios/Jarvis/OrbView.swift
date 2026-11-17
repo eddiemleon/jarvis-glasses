@@ -1,9 +1,28 @@
 import SwiftUI
 
+/// Niveles de audio (micrófono y voz de Jarvis). Se escriben desde el hilo de audio y la esfera los lee
+/// en cada cuadro: así la animación va a la frecuencia de la pantalla (60/120 Hz) sin redibujar la app entera.
+final class AudioLevels: @unchecked Sendable {
+    private let lock = NSLock()
+    private var mic: Float = 0, out: Float = 0
+    private var shown: Double = 0, last: Double = 0
+    func setMic(_ v: Float) { lock.lock(); mic = v; lock.unlock() }
+    func setOut(_ v: Float) { lock.lock(); out = v; lock.unlock() }
+    /// Nivel suavizado para el instante t (sube rápido, baja suave, como un vúmetro).
+    func level(at t: Double, listening: Bool) -> Double {
+        lock.lock(); defer { lock.unlock() }
+        let target = Double(max(mic * (listening ? 1 : 0.25), out))
+        let dt = min(0.1, max(0, t - last)); last = t
+        let k = target > shown ? 1 - exp(-dt / 0.05) : 1 - exp(-dt / 0.18)
+        shown += (target - shown) * k
+        return shown
+    }
+}
+
 /// Orbe de partículas estilo Jarvis: reacciona a tu voz, a la voz de Jarvis y al estado.
 struct OrbView: View {
     let state: JarvisState
-    let level: Float
+    let levels: AudioLevels
 
     private static let points: [SIMD3<Double>] = {
         let n = 240
@@ -38,12 +57,12 @@ struct OrbView: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30)) { tl in // 30 cuadros/s: fluido y liviano
+        TimelineView(.animation) { tl in // a la frecuencia de la pantalla (hasta 120 cuadros/s)
             Canvas { ctx, size in
                 let t = tl.date.timeIntervalSinceReferenceDate
                 let c = CGPoint(x: size.width / 2, y: size.height / 2)
                 let base = min(size.width, size.height) * 0.34
-                let lvl = Double(level)
+                let lvl = levels.level(at: t, listening: state == .listening)
                 let breathe = 1 + 0.03 * sin(t * 1.4)
                 let R = base * breathe * (1 + lvl * 0.18)
 
@@ -65,7 +84,7 @@ struct OrbView: View {
                 let ax = 0.38
                 let (sy, cy) = (sin(ay), cos(ay))
                 let (sx, cx) = (sin(ax), cos(ax))
-                var proj: [(CGPoint, Double, Double)] = []
+                var proj: [(CGPoint, Double, Double)] = []  // (las de atrás se dibujan primero)
                 proj.reserveCapacity(Self.points.count)
                 for (i, p) in Self.points.enumerated() {
                     var x = p.x * cy + p.z * sy

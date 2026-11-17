@@ -53,7 +53,7 @@ private struct InnerBody: View {
                 .ignoresSafeArea()
             VStack(spacing: 10) {
                 chips
-                OrbView(state: model.state, level: max(model.micLevel * (model.state == .listening ? 1 : 0.25), model.outLevel))
+                OrbView(state: model.state, levels: model.levels)
                     .frame(maxWidth: .infinity)
                     .frame(height: 330)
                     .onTapGesture { model.pushToTalk() }

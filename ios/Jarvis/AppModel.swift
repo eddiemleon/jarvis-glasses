@@ -15,8 +15,8 @@ final class AppModel: ObservableObject {
     @Published var userText = ""
     @Published var assistantText = ""
     @Published var statusLine = ""
-    @Published var micLevel: Float = 0
-    @Published var outLevel: Float = 0
+    /// Niveles de audio para la esfera: se leen en cada cuadro, sin redibujar toda la pantalla.
+    let levels = AudioLevels()
     @Published var serverConnected = false
     @Published var serverModel = ""
     @Published var routeName = "—"
@@ -95,16 +95,9 @@ final class AppModel: ObservableObject {
             speechRef.feed(buf)
             liveRef.feedAudio(buf)
         }
-        let micGate = FrameThrottle(minInterval: 0.1) // 10 refrescos/s bastan para la esfera
-        audio.onMicLevel = { [weak self] v in
-            guard micGate.ok() else { return }
-            Task { @MainActor in self?.micLevel = v }
-        }
-        let outGate = FrameThrottle(minInterval: 0.1)
-        audio.onOutLevel = { [weak self] v in
-            guard outGate.ok() else { return }
-            Task { @MainActor in self?.outLevel = v }
-        }
+        let levelsRef = levels
+        audio.onMicLevel = { v in levelsRef.setMic(v) }
+        audio.onOutLevel = { v in levelsRef.setOut(v) }
         audio.onRouteChanged = { [weak self] in
             Task { @MainActor in self?.refreshRoute() }
         }
