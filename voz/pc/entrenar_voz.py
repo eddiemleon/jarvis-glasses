@@ -9,7 +9,7 @@ DATOS = AQUI / "datos"
 TRAB = AQUI / "trabajo"
 MODO = sys.argv[1] if len(sys.argv) > 1 else "prueba"
 HORAS = float(os.environ.get("HORAS", "8"))
-FIN_HORA = os.environ.get("TERMINAR_A", "06:00" if MODO == "completo" else "")  # p. ej. "06:00": entrena hasta esa hora (deja margen para exportar)
+FIN_HORA = os.environ.get("TERMINAR_A", "06:00" if MODO in ("completo", "continuar") else "")  # p. ej. "06:00": entrena hasta esa hora (deja margen para exportar)
 PY = sys.executable
 
 
@@ -29,10 +29,11 @@ def checkpoint():
 def preparar():
     """Más datos con el estilo de Jarvis + revisión con Whisper: solo entra audio que dice exactamente su texto."""
     venv_xtts = AQUI / "venv" / "Scripts" / "python.exe"
-    if (AQUI / "jarvis_extra.txt").exists():
-        n = len([l for l in (AQUI / "jarvis_extra.txt").read_text(encoding="utf-8").splitlines() if l.strip()])
-        log(f"generando {n} frases extra de Jarvis")
-        subprocess.run([str(venv_xtts), str(AQUI / "generar_datos.py"), str(n), "jarvis_extra.txt", "e"], check=False)
+    for archivo, prefijo in (("jarvis_extra.txt", "e"), ("frases_noche2.txt", "d")):
+        if (AQUI / archivo).exists():
+            n = len([l for l in (AQUI / archivo).read_text(encoding="utf-8").splitlines() if l.strip()])
+            log(f"generando {n} frases de {archivo}")
+            subprocess.run([str(venv_xtts), str(AQUI / "generar_datos.py"), str(n), archivo, prefijo], check=False)
     try:
         import faster_whisper  # noqa: F401
     except ImportError:
@@ -65,7 +66,11 @@ def entrenar(meta=None):
     meta = meta or (DATOS / "metadata.csv")
     n = len(meta.read_text(encoding="utf-8").splitlines())
     prueba = MODO == "prueba"
-    base_ck = None if prueba else checkpoint()
+    if MODO == "continuar":  # sigue mejorando el modelo de la noche anterior con más datos
+        base_ck = str(sorted((TRAB / "completo").glob("lightning_logs/version_*/checkpoints/last.ckpt"), key=os.path.getmtime)[-1])
+        log("continúa desde", base_ck)
+    else:
+        base_ck = None if prueba else checkpoint()
     # Si la tarjeta se queda sin memoria (la comparte con otros programas), se reintenta con lotes más chicos.
     for lote in (["2"] if prueba else ["10", "6", "3"]):
         ultimo = sorted(raiz.glob("lightning_logs/version_*/checkpoints/last.ckpt"), key=os.path.getmtime)
@@ -149,5 +154,5 @@ if __name__ == "__main__":
         raiz = TRAB / MODO
         ck = sorted(raiz.glob("lightning_logs/version_*/checkpoints/last.ckpt"), key=os.path.getmtime)[-1]
         probar(exportar(raiz, ck)); sys.exit(0)
-    raiz, ck = entrenar(preparar() if MODO == "completo" else None)
+    raiz, ck = entrenar(preparar() if MODO in ("completo", "continuar") else None)
     probar(exportar(raiz, ck))

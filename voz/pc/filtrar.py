@@ -34,6 +34,18 @@ def main():
     m = WhisperModel("small", device="cpu", compute_type="int8", cpu_threads=4)
     filas = [l.split("|", 1) for l in (DATOS / "metadata.csv").read_text(encoding="utf-8").splitlines() if "|" in l]
     buenas, malas, t0 = [], [], time.time()
+    # Lo ya revisado no se vuelve a revisar.
+    limpio = DATOS / "metadata_limpio.csv"
+    previas = set()
+    if limpio.exists():
+        for l in limpio.read_text(encoding="utf-8").splitlines():
+            if "|" in l:
+                w, t = l.split("|", 1); buenas.append((w, t, "", 0.0)); previas.add(w)
+    desc = DATOS / "descartados.txt"
+    if desc.exists():
+        previas |= {l.split(" ", 1)[0] for l in desc.read_text(encoding="utf-8").splitlines() if l.endswith("%)")}
+    filas = [f for f in filas if f[0] not in previas]
+    print(f"ya revisados: {len(previas)}; nuevos: {len(filas)}", flush=True)
     for k, (wav, texto) in enumerate(filas):
         segs, _ = m.transcribe(str(DATOS / "wavs" / wav), language="es", beam_size=1, vad_filter=False,
                                condition_on_previous_text=False)
@@ -43,7 +55,7 @@ def main():
         if k % 50 == 0:
             print(time.strftime("%H:%M:%S"), f"{k}/{len(filas)} revisados", flush=True)
     (DATOS / "metadata_limpio.csv").write_text("".join(f"{w}|{t}\n" for w, t, _, _ in buenas), encoding="utf-8")
-    with open(DATOS / "descartados.txt", "w", encoding="utf-8") as f:
+    with open(DATOS / "descartados.txt", "a", encoding="utf-8") as f:
         for w, t, o, e in malas:
             f.write(f"{w} ({e:.0%})\n  texto: {t}\n  oido:  {o.strip()}\n")
     print(time.strftime("%H:%M:%S"), f"FILTRO: {len(buenas)} buenos, {len(malas)} descartados ({time.time() - t0:.0f}s)", flush=True)
