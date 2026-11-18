@@ -33,9 +33,14 @@ async function open(params, signal) {
   }
 }
 
+// Diagnóstico de la última llamada (para medir la fluidez): tiempos y uso de caché.
+export const lastCall = {};
+
 // Devuelve el mensaje final armado {content, stop_reason}. onText recibe cada fragmento de texto.
 export async function createMessage(params, { signal, onText } = {}) {
+  const t0 = Date.now();
   const res = await open(params, signal);
+  Object.assign(lastCall, { model: params.model, cabeceras_ms: Date.now() - t0, primerBloque: null, primerBloque_ms: null, cache_leida: 0, entrada: 0 });
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = '';
@@ -48,6 +53,7 @@ export async function createMessage(params, { signal, onText } = {}) {
     switch (ev.type) {
       case 'content_block_start': {
         const b = { ...ev.content_block };
+        if (lastCall.primerBloque == null) Object.assign(lastCall, { primerBloque: b.type, primerBloque_ms: Date.now() - t0 });
         if (b.type === 'text') {
           b.text = b.text || '';
           delete b.citations;
@@ -83,6 +89,7 @@ export async function createMessage(params, { signal, onText } = {}) {
       case 'message_start': {
         const u = ev.message?.usage || {};
         usage.input += (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
+        Object.assign(lastCall, { cache_leida: u.cache_read_input_tokens || 0, cache_creada: u.cache_creation_input_tokens || 0, entrada: u.input_tokens || 0, inicio_ms: Date.now() - t0 });
         break;
       }
       case 'message_delta':

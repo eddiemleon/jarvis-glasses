@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { config, log } from './config.js';
 import { hub } from './hub.js';
 import { store } from './store.js';
-import { ApiError } from './claude.js';
+import { ApiError, lastCall } from './claude.js';
 import { callLLM } from './llm.js';
 import { toolDefs, runTool, BACKGROUND_TOOLS } from './tools.js';
 import { localNow } from './routines.js';
@@ -205,7 +205,7 @@ function friendly(e) {
 // ---------- tiempos de respuesta (para medir la fluidez real) ----------
 const timings = [];
 function recordTiming(t) {
-  const r = { at: new Date(t.start).toISOString(), nivel: t.nivel, primerTexto_ms: t.first ? t.first - t.start : null, primeraFrase_ms: t.say ? t.say - t.start : null };
+  const r = { at: new Date(t.start).toISOString(), nivel: t.nivel, primerTexto_ms: t.first ? t.first - t.start : null, primeraFrase_ms: t.say ? t.say - t.start : null, api: { ...lastCall } };
   timings.push(r);
   if (timings.length > 30) timings.shift();
   log(`tiempos: ${r.nivel} texto ${r.primerTexto_ms} ms, primera frase ${r.primeraFrase_ms} ms`);
