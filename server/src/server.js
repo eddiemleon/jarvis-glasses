@@ -156,6 +156,14 @@ const server = http.createServer(async (req, res) => {
     }
 
     // La PC del usuario avisa dónde está su voz propia (túnel seguro). Cada 5 min.
+    if (url.pathname === '/lion/register' && req.method === 'POST') {
+      if (!authed(req)) return reply(res, 401, 'unauthorized');
+      let b = null;
+      try { b = JSON.parse((await readBody(req, 5_000)).toString('utf8') || '{}'); } catch {}
+      if (!b || !/^https:\/\//.test(String(b.url || '')) || String(b.key || '').length < 12) return reply(res, 400, 'url https y key requeridos');
+      store.setLion(b);
+      return reply(res, 200, JSON.stringify({ ok: true }), 'application/json');
+    }
     if (url.pathname === '/voice/register' && req.method === 'POST') {
       if (!authed(req)) return reply(res, 401, 'unauthorized');
       const { url: voiceUrl } = JSON.parse((await readBody(req, 5_000)).toString('utf8') || '{}');

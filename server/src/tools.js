@@ -6,6 +6,7 @@ import { sendText, waEnabled } from './whatsapp.js';
 import { live } from './live.js';
 import { addReminder, listReminders, cancelReminder } from './reminders.js';
 import { quickAsk } from './llm.js';
+import { lionEnabled, lionEstado, lionEncargar, lionAgentes } from './lion.js';
 import { addRoutine, removeRoutines, describeDays, parseWhen, BRIEFING_PROMPT } from './routines.js';
 
 const LANGS = { 'en-US': 'inglés', 'fr-FR': 'francés', 'it-IT': 'italiano', 'pt-BR': 'portugués', 'de-DE': 'alemán', 'ja-JP': 'japonés', 'zh-CN': 'chino', 'ko-KR': 'coreano' };
@@ -199,11 +200,22 @@ export function toolDefs() {
       },
     },
     { name: 'interpreter_stop', description: 'Termina el modo intérprete.', input_schema: { type: 'object', properties: {} } },
+    {
+      name: 'lion_estado',
+      description: 'Estado EN VIVO de Lion Capital (su sala de trading en la PC, cuenta The5ers en MT5): balance, ganancia total y de hoy vs objetivo, días ganadores, frenos de pérdida, riesgo abierto, posiciones por estrategia, precio del oro y si el EA está corriendo. Úsala para "cómo va Lion Capital", "cómo va la cuenta", "qué tengo abierto".',
+      input_schema: { type: 'object', properties: {} },
+    },
+    {
+      name: 'lion_encargar',
+      description: 'Pasa una pregunta o un encargo a un agente de Lion Capital (por defecto el Director, que coordina la sala, la fábrica de estrategias y el laboratorio). Úsala para delegar tareas o preguntar por el proyecto (fábrica, estrategias, noticias, fase del reto). La respuesta tarda: dile a Leon que se lo pasaste y que le avisarás cuando responda.',
+      input_schema: { type: 'object', properties: { agente: { type: 'string', description: 'id del agente, por defecto director' }, texto: { type: 'string' } }, required: ['texto'] },
+    },
+    { name: 'lion_agentes', description: 'Lista los agentes de Lion Capital (id, nombre, rol) para saber a quién delegar.', input_schema: { type: 'object', properties: {} } },
   ];
 }
 
 // Tareas en segundo plano (rutinas): solo herramientas de lectura, nada que envíe, grabe o cambie cosas.
-export const BACKGROUND_TOOLS = new Set(['tradingview_alerts', 'whatsapp_recent', 'list_reminders', 'calendar_events', 'visual_recall']);
+export const BACKGROUND_TOOLS = new Set(['tradingview_alerts', 'whatsapp_recent', 'list_reminders', 'calendar_events', 'visual_recall', 'lion_estado']);
 
 // ---- traducción para el modo intérprete (en orden, con el modelo económico) ----
 let translateChain = Promise.resolve();
@@ -424,6 +436,17 @@ export async function runTool(name, input, ctx) {
         if (!hub.send({ type: 'interpreter', on: true, locale })) return { content: 'La app no está conectada.', is_error: true };
         return { content: `Modo intérprete activado (${LANGS[locale]} → español). Dile en una frase que diga "Jarvis" para salir.` };
       }
+      case 'lion_estado':
+        if (!lionEnabled()) return { content: 'Lion Capital aún no está conectado a Jarvis.', is_error: true };
+        return { content: untrusted('Lion Capital en vivo', await lionEstado()) };
+      case 'lion_encargar': {
+        if (!lionEnabled()) return { content: 'Lion Capital aún no está conectado a Jarvis.', is_error: true };
+        const a = lionEncargar(input.agente, String(input.texto || ''));
+        return { content: `Encargo enviado a "${a}" de Lion Capital. La respuesta llegará sola como aviso de voz.` };
+      }
+      case 'lion_agentes':
+        if (!lionEnabled()) return { content: 'Lion Capital aún no está conectado a Jarvis.', is_error: true };
+        return { content: untrusted('Agentes de Lion Capital', await lionAgentes()) };
       case 'interpreter_stop':
         hub.send({ type: 'interpreter', on: false });
         return { content: 'Modo intérprete terminado.' };

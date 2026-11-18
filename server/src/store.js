@@ -33,7 +33,7 @@ const cap = (arr, n) => {
 
 // Copia de la memoria que se guarda en el iPhone (el plan gratis de Render borra el disco al dormirse).
 // No incluye fotos (pesan mucho); sí datos, recordatorios, rutinas, notas visuales y horarios.
-const SYNC_KEYS = ['facts', 'reminders', 'routines', 'visual', 'activity', 'alerts', 'wa'];
+const SYNC_KEYS = ['facts', 'reminders', 'routines', 'visual', 'activity', 'alerts', 'wa', 'lion'];
 export function snapshot() {
   const out = {};
   for (const k of SYNC_KEYS) out[k] = state[k];
@@ -55,6 +55,11 @@ export function setOnChange(fn) {
 }
 
 export const store = {
+  lion: () => state.lion || {},
+  setLion(v) {
+    state.lion = { url: String(v.url || '').trim(), key: String(v.key || '').trim(), at: Date.now() };
+    save();
+  },
   facts: () => state.facts,
   addFact(text) {
     const t = String(text).trim().slice(0, 300);
