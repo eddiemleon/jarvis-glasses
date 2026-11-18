@@ -19,7 +19,13 @@ PREFIJO = sys.argv[3] if len(sys.argv) > 3 else "c"
 
 
 def log(*a):
-    print(time.strftime("%H:%M:%S"), *a, flush=True)
+    linea = " ".join(str(x) for x in (time.strftime("%H:%M:%S"),) + a)
+    print(linea, flush=True)
+    try:
+        with open(AQUI / "datos" / "progreso.log", "a", encoding="utf-8") as f:
+            f.write(linea + "\n")
+    except Exception:
+        pass
 
 
 def main():
@@ -68,7 +74,7 @@ def main():
                 wf.writeframes((w * 32767).astype("<i2").tobytes())
             f.write(f"{nombre}|{t}\n"); f.flush()
             total += len(w) / SR_OUT
-            if k % 20 == 0:
+            if k % 5 == 0:
                 log(f"{k + 1}/{len(pend)}  audio {total / 60:.1f} min  ({time.time() - t0:.0f}s)")
     log(f"LISTO datos: {total / 60:.1f} min nuevos")
 
