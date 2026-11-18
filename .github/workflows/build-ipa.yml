@@ -42,7 +42,7 @@ jobs:
           ls build-ios "$ORT/onnxruntime.xcframework"
           cd ..
           rm -rf VozJarvis && mkdir -p VozJarvis /tmp/vj
-          if gh release download voz-jarvis -p jarvis-voz.zip -D /tmp/vj 2>/dev/null; then
+          if git fetch -q --depth 1 origin voz-modelo 2>/dev/null && git show FETCH_HEAD:jarvis-voz.zip > /tmp/vj/jarvis-voz.zip 2>/dev/null && [ -s /tmp/vj/jarvis-voz.zip ]; then
             unzip -q /tmp/vj/jarvis-voz.zip -d VozJarvis
             echo jarvis > VozJarvis/origen.txt
           else
