@@ -4,7 +4,7 @@ import { config, log } from './config.js';
 import { upgrade } from './ws.js';
 import { hub } from './hub.js';
 import { store, snapshot, restore, setOnChange } from './store.js';
-import { runTurn, cancelCurrent, runBackground, historySnapshot, restoreHistory, onTurnDone } from './brain.js';
+import { runTurn, cancelCurrent, runBackground, historySnapshot, restoreHistory, onTurnDone, timingStats } from './brain.js';
 import { verifySignature, parseIncoming, waEnabled } from './whatsapp.js';
 import { synthesize, ttsEnabled, registerPcVoice, ttsSource } from './tts.js';
 import { live, VIEWER_HTML, EXPIRED_HTML } from './live.js';
@@ -92,6 +92,10 @@ const server = http.createServer(async (req, res) => {
       return reply(res, 200, `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><body style="background:#05070d;color:#fff;font-family:-apple-system,sans-serif;text-align:center;padding:60px 20px"><h1>Jarvis</h1><p>Abre esto en tu iPhone con la app instalada:</p><a href="${link}" style="display:inline-block;background:#18b6ff;color:#001018;padding:18px 34px;border-radius:16px;font-size:20px;font-weight:700;text-decoration:none">Conectar la app</a></body>`, 'text/html; charset=utf-8');
     }
 
+    if (req.method === 'GET' && url.pathname === '/timings') {
+      if (!authed(req)) return reply(res, 401, 'unauthorized');
+      return reply(res, 200, JSON.stringify({ timings: timingStats() }), 'application/json');
+    }
     if (req.method === 'GET' && url.pathname === '/usage') {
       if (!authed(req)) return reply(res, 401, 'unauthorized');
       return reply(res, 200, JSON.stringify(usageSnapshot()), 'application/json');

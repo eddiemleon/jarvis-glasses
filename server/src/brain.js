@@ -21,6 +21,7 @@ TONO EMOCIONAL (como J.A.R.V.I.S. con Tony Stark)
 
 REGLAS DE VOZ (críticas)
 - Responde en 1 a 3 frases cortas salvo que pida detalle. Primero la respuesta, luego el contexto.
+- Conversación fluida como una llamada: tu PRIMERA frase siempre corta (menos de 8 palabras), porque empieza a sonar en cuanto la terminas.
 - Cero markdown, cero listas, cero emojis, cero URLs. Di los números como se hablan ("dos mil trescientos cuarenta dólares con cincuenta").
 - Si algo es largo, da el resumen y ofrece ampliar.
 - Si no entendiste algo por ruido, pide repetir en pocas palabras.
@@ -43,6 +44,9 @@ SEGURIDAD
 - Trading: da análisis y datos con rigor; no prometas resultados. Menciona riesgo solo cuando afecte la decisión, en una frase.
 - Si no sabes o no puedes, dilo claro y propone la mejor alternativa.`;
 
+// Rapidez como una conversación real: lo cotidiano va al modelo rápido (responde en menos de 1 s),
+// lo que exige razonar al normal y solo lo realmente profundo al más potente (2-3 s).
+const DEEP = /analiza a fondo|piensa bien|a profundidad|estrategia completa|plan detallado|paso a paso|pros y contras|compara en detalle/i;
 const COMPLEX = /analiz|estrategi|compar|explic|planific|\bplan\b|por qu[eé]|c[oó]digo|calcul|resum|redact|escrib|decid|recomiend|pros y contras|paso a paso|negoci|invers|riesgo/i;
 let history = [];
 
@@ -142,18 +146,30 @@ export function cleanForSpeech(s) {
 function makeSpeaker(id) {
   let buf = '';
   let seq = 0;
+  const sp = {};
   const emit = (sentences) => {
     for (const s of sentences) {
       const t = cleanForSpeech(s);
-      if (t) hub.send({ type: 'say', id, seq: seq++, text: t });
+      if (t) {
+        if (seq === 0) sp.onFirst?.();
+        hub.send({ type: 'say', id, seq: seq++, text: t });
+      }
     }
   };
-  return {
+  return Object.assign(sp, {
     push(t) {
       buf += t;
       const r = takeSentences(buf, false);
       buf = r.rest;
       emit(r.sentences);
+      // Para empezar a hablar cuanto antes: si la primera oración se alarga, se dice hasta la primera coma.
+      if (seq === 0 && buf.length > 28) {
+        const m = buf.match(/^(.{18,}?[,;:])\s/);
+        if (m) {
+          emit([m[1]]);
+          buf = buf.slice(m[0].length);
+        }
+      }
     },
     end() {
       const r = takeSentences(buf, true);
@@ -164,7 +180,7 @@ function makeSpeaker(id) {
     get spoke() {
       return seq > 0;
     },
-  };
+  });
 }
 
 function trimHistory(msgs, keep = 24) {
@@ -186,6 +202,16 @@ function friendly(e) {
   return 'Tuve un problema procesando eso, señor. Intente otra vez.';
 }
 
+// ---------- tiempos de respuesta (para medir la fluidez real) ----------
+const timings = [];
+function recordTiming(t) {
+  const r = { at: new Date(t.start).toISOString(), nivel: t.nivel, primerTexto_ms: t.first ? t.first - t.start : null, primeraFrase_ms: t.say ? t.say - t.start : null };
+  timings.push(r);
+  if (timings.length > 30) timings.shift();
+  log(`tiempos: ${r.nivel} texto ${r.primerTexto_ms} ms, primera frase ${r.primeraFrase_ms} ms`);
+}
+export const timingStats = () => timings.slice();
+
 // ---------- turno ----------
 export async function runTurn({ id, text, context }) {
   cancelCurrent();
@@ -200,6 +226,11 @@ export async function runTurn({ id, text, context }) {
   context = { ...context, welcome };
   const msgs = [...history, { role: 'user', content: text }];
   const ctx = { turn: turnNo, signal: ac.signal, location: context?.location };
+  const deep = text.length > 320 || DEEP.test(text);
+  const medio = !deep && (text.length > 140 || COMPLEX.test(text));
+  const nivel = deep ? { complex: true } : medio ? {} : { fast: true };
+  const timing = { start: nowMs, first: null, nivel: deep ? 'profundo' : medio ? 'normal' : 'rapido' };
+  speaker.onFirst = () => { timing.say ??= Date.now(); };
 
   try {
     if (config.mock) {
@@ -224,7 +255,7 @@ export async function runTurn({ id, text, context }) {
           tools,
           messages: msgs,
         },
-        { signal: ac.signal, complex: text.length > 200 || COMPLEX.test(text), onText: (t) => speaker.push(t), onNotice: (t) => speaker.push(t + ' ') }
+        { signal: ac.signal, ...nivel, onText: (t) => { timing.first ??= Date.now(); speaker.push(t); }, onNotice: (t) => speaker.push(t + ' ') }
       );
       speaker.end();
       msgs.push({ role: 'assistant', content: msg.content });
@@ -248,6 +279,7 @@ export async function runTurn({ id, text, context }) {
     if (msgs.at(-1)?.role === 'assistant' && msgs.at(-1).content.some?.((b) => b.type === 'tool_use')) msgs.pop(); // no dejar herramientas sin respuesta
     history = trimHistory(msgs);
     hub.send({ type: 'done', id });
+    recordTiming(timing);
     onTurnDone.fn?.();
   } catch (e) {
     if (ac.signal.aborted || e.name === 'AbortError') return;

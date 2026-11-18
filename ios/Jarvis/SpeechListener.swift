@@ -34,7 +34,7 @@ final class SpeechListener: @unchecked Sendable {
     private var running = false
 
     // Tiempos (segundos)
-    var endSilence: TimeInterval = 1.15
+    var endSilence: TimeInterval = 0.75   // como una llamada: responde apenas usted termina (antes 1.15 s)
     var emptyTimeoutWake: TimeInterval = 6
     var emptyTimeoutFollowUp: TimeInterval = 7
     var maxCapture: TimeInterval = 40

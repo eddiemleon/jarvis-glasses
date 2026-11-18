@@ -209,7 +209,10 @@ try {
   assert.equal(readFileSync(DIR_A + '/visual/' + readdirSync(DIR_A + '/visual')[0]).toString('base64'), '/9j/4AAQSkZJRg==');
   ok('la foto queda guardada en el disco del servidor, intacta');
   const fastCalls = calls.filter((p) => /Describe en UNA frase/.test(p.system[0].text));
-  assert.deepEqual(fastCalls.map((p) => p.model), ['claude-haiku-5-5', 'claude-sonnet-5-5']);
+  // La conversación ya intenta Haiku primero: al no existir (404) cae a Sonnet y lo recuerda para todo lo demás.
+  assert.equal(calls[0].model, 'claude-haiku-5-5');
+  assert.ok(calls.slice(1).every((p) => p.model === 'claude-sonnet-5-5'));
+  assert.deepEqual(fastCalls.map((p) => p.model), ['claude-sonnet-5-5']);
   ok('modelo económico: si Haiku no existe en la cuenta, cae a Sonnet sin romper nada');
 
   said = await turn(c, 'v2', 'DO visual_recall {"query":"¿dónde dejé las llaves?"}');

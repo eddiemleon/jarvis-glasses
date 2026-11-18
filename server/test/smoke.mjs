@@ -154,7 +154,7 @@ try {
   assert.equal(second.content[0].type, 'image');
   assert.equal(second.content[0].source.data, 'QUJDRA=='); ok('la foto llega a Claude como bloque image base64');
   assert.match(anthropicCalls[0].system[1].text, /San Juan/); ok('ubicación inyectada en el contexto');
-  assert.equal(anthropicCalls[0].model, 'claude-sonnet-5-5'); ok('modelo por defecto claude-sonnet-5-5');
+  assert.equal(anthropicCalls[0].model, 'claude-haiku-5-5'); ok('pregunta cotidiana → modelo rápido claude-haiku-5-5');
   assert.ok(anthropicCalls[0].tools.some((t) => t.name === 'whatsapp_draft')); ok('herramientas expuestas');
   console.log(`\n${pass} pruebas OK`);
 } catch (e) {
