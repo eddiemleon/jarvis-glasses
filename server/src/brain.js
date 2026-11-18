@@ -248,6 +248,8 @@ export async function runTurn({ id, text, context }) {
       const msg = await callLLM(
         {
           max_tokens: config.maxTokens,
+          // Conversación rápida: sin razonamiento previo (medido: añadía ~1 s antes de la primera palabra).
+          ...(nivel.fast ? { thinking: { type: 'disabled' } } : {}),
           system: [
             { type: 'text', text: STATIC_PROMPT, cache_control: { type: 'ephemeral' } },
             { type: 'text', text: dynamicContext(context) },

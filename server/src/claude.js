@@ -9,8 +9,14 @@ export class ApiError extends Error {
   }
 }
 
+let thinkingOffOk = true; // si la API no acepta apagar el razonamiento, se deja de enviar
+
 async function open(params, signal) {
   const url = `${config.anthropicBase}/v1/messages`;
+  if (params.thinking && !thinkingOffOk) {
+    params = { ...params };
+    delete params.thinking;
+  }
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(url, {
       method: 'POST',
@@ -24,6 +30,13 @@ async function open(params, signal) {
     });
     if (res.ok) return res;
     const body = await res.text();
+    if (res.status === 400 && params.thinking && /thinking/i.test(body)) {
+      log('claude: la API no acepta thinking=disabled; sigo sin ese ajuste');
+      thinkingOffOk = false;
+      params = { ...params };
+      delete params.thinking;
+      continue;
+    }
     if ((res.status === 429 || res.status >= 500) && attempt < 2) {
       log('claude: reintento por', res.status);
       await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
