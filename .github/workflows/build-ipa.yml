@@ -74,6 +74,8 @@ jobs:
           cp -R build/Build/Products/Release-iphoneos/Jarvis.app Payload/
           zip -qry Jarvis-unsigned.ipa Payload
           ls -la Jarvis-unsigned.ipa
+          # Verifica que el logo quedó dentro de la app
+          if plutil -p Payload/Jarvis.app/Info.plist | grep -q CFBundleIconName && [ -f Payload/Jarvis.app/Assets.car ]; then echo "JARVIS-CHECK logo: OK" | tee -a build.log; else echo "JARVIS-CHECK logo: FALTA" | tee -a build.log; exit 1; fi
       - uses: actions/upload-artifact@v4
         with:
           name: Jarvis-unsigned-ipa
@@ -120,7 +122,7 @@ jobs:
         run: |
           {
             echo "run=${{ github.run_id }} commit=${{ github.sha }} fecha=$(date -u +%FT%TZ)"
-            echo "== compilación =="; grep -E "error:|BUILD SUCCEEDED|BUILD FAILED" build.log 2>/dev/null | sort -u | head -60
+            echo "== compilación =="; grep -E "error:|BUILD SUCCEEDED|BUILD FAILED|JARVIS-CHECK" build.log 2>/dev/null | sort -u | head -60
             echo "== pruebas =="
             grep -E "error:|Test Case|Executed|TEST SUCCEEDED|TEST FAILED|Testing failed|XCTAssert|Simulador|JARVIS-CHECK" test.log 2>/dev/null | head -150
             echo "== final de pruebas =="; grep -v "^objc\\[" test.log 2>/dev/null | tail -40

@@ -46,6 +46,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         DEVELOPMENT_TEAM: ""                              # o elige tu Team en Xcode > Signing & Capabilities
         SWIFT_OBJC_BRIDGING_HEADER: Jarvis/Sherpa/Jarvis-Bridging-Header.h
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon        # logo de Jarvis en la pantalla de inicio
         HEADER_SEARCH_PATHS: $(PROJECT_DIR)/Vendor/build-ios/sherpa-onnx.xcframework/Headers
     entitlements:
       path: Jarvis/Jarvis.entitlements
