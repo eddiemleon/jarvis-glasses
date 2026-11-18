@@ -45,6 +45,16 @@ final class LocalVoice: @unchecked Sendable {
         return true
     }
 
+    /// Ritmo según la intención de la frase, como hablaría Jarvis: con energía en las buenas noticias,
+    /// pausado en las advertencias.
+    static func speed(for text: String) -> Float {
+        let t = text.lowercased()
+        let serias = ["cuidado", "precaución", "atención", "me temo", "riesgo", "peligro", "recomiendo", "advert", "no es posible", "lo siento"]
+        if serias.contains(where: { t.contains($0) }) { return 0.94 }
+        if t.contains("!") { return 1.07 }
+        return 1.0
+    }
+
     /// Frase -> audio PCM (formato del modelo). nil si el modelo no está o falló.
     func render(_ text: String, speed: Float = 1.0) -> AVAudioPCMBuffer? {
         guard load() else { return nil }

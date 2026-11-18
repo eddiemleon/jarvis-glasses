@@ -31,7 +31,7 @@ final class Speaker {
         let local = LocalVoice.enabled
         let task = Task.detached(priority: .userInitiated) { () -> [AVAudioPCMBuffer] in
             // 1) Voz de Jarvis dentro del iPhone: instantánea, sin internet ni servidor.
-            if local, let b = LocalVoice.shared.render(clean), let c = AudioIO.Converter().convert(b) { return [c] }
+            if local, let b = LocalVoice.shared.render(clean, speed: LocalVoice.speed(for: clean)), let c = AudioIO.Converter().convert(b) { return [c] }
             if remote, let r = await Speaker.renderRemote(clean), !r.isEmpty { return r }
             return await Speaker.renderSystem(clean)
         }

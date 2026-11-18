@@ -14,6 +14,8 @@ from voz_jarvis import Voz  # noqa: E402
 SR, SR_OUT = 24000, 22050
 DATOS = AQUI / "datos"
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 620
+ARCHIVOS = sys.argv[2].split(",") if len(sys.argv) > 2 else ["jarvis_frases.txt", "frases_corpus.txt"]
+PREFIJO = sys.argv[3] if len(sys.argv) > 3 else "c"
 
 
 def log(*a):
@@ -23,12 +25,12 @@ def log(*a):
 def main():
     import torch, librosa
     from TTS.api import TTS
-    frases = [l.strip() for f in ("jarvis_frases.txt", "frases_corpus.txt")
+    frases = [l.strip() for f in ARCHIVOS
               for l in (AQUI / f).read_text(encoding="utf-8").splitlines() if l.strip()][:N]
     (DATOS / "wavs").mkdir(parents=True, exist_ok=True)
     meta = DATOS / "metadata.csv"
     hechas = {l.split("|", 1)[0] for l in meta.read_text(encoding="utf-8").splitlines()} if meta.exists() else set()
-    pend = [(i, t) for i, t in enumerate(frases) if f"c{i:04d}.wav" not in hechas]
+    pend = [(i, t) for i, t in enumerate(frases) if f"{PREFIJO}{i:04d}.wav" not in hechas]
     log(f"frases {len(frases)}, faltan {len(pend)}")
     if not pend:
         return
@@ -60,7 +62,7 @@ def main():
                 log("descartada:", t[:50]); continue
             w = librosa.resample(mejor[1], orig_sr=SR, target_sr=SR_OUT)
             w = np.clip(w / max(1e-6, float(np.abs(w).max())) * 0.9, -1, 1)
-            nombre = f"c{i:04d}.wav"
+            nombre = f"{PREFIJO}{i:04d}.wav"
             with wave.open(str(DATOS / "wavs" / nombre), "wb") as wf:
                 wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SR_OUT)
                 wf.writeframes((w * 32767).astype("<i2").tobytes())

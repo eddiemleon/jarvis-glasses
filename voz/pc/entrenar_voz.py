@@ -9,6 +9,7 @@ DATOS = AQUI / "datos"
 TRAB = AQUI / "trabajo"
 MODO = sys.argv[1] if len(sys.argv) > 1 else "prueba"
 HORAS = float(os.environ.get("HORAS", "8"))
+FIN_HORA = os.environ.get("TERMINAR_A", "06:00" if MODO == "completo" else "")  # p. ej. "06:00": entrena hasta esa hora (deja margen para exportar)
 PY = sys.executable
 
 
@@ -25,35 +26,74 @@ def checkpoint():
     return hf_hub_download("rhasspy/piper-checkpoints", fs[0], repo_type="dataset", cache_dir=str(AQUI / "hf"))
 
 
-def entrenar():
+def preparar():
+    """Más datos con el estilo de Jarvis + revisión con Whisper: solo entra audio que dice exactamente su texto."""
+    venv_xtts = AQUI / "venv" / "Scripts" / "python.exe"
+    if (AQUI / "jarvis_extra.txt").exists():
+        n = len([l for l in (AQUI / "jarvis_extra.txt").read_text(encoding="utf-8").splitlines() if l.strip()])
+        log(f"generando {n} frases extra de Jarvis")
+        subprocess.run([str(venv_xtts), str(AQUI / "generar_datos.py"), str(n), "jarvis_extra.txt", "e"], check=False)
+    try:
+        import faster_whisper  # noqa: F401
+    except ImportError:
+        subprocess.run([str(AQUI / "uv.exe"), "pip", "install", "--python", PY, "faster-whisper"], check=False)
+    r = subprocess.run([PY, str(AQUI / "filtrar.py")], check=False)
+    limpio = DATOS / "metadata_limpio.csv"
+    if r.returncode == 0 and limpio.exists() and len(limpio.read_text(encoding="utf-8").splitlines()) > 200:
+        return limpio
+    log("filtro no disponible: se usan todos los clips")
+    return DATOS / "metadata.csv"
+
+
+def horas_disponibles():
+    if not FIN_HORA:
+        return HORAS
+    import datetime as dt
+    ahora = dt.datetime.now()
+    h, m = map(int, FIN_HORA.split(":"))
+    fin = ahora.replace(hour=h, minute=m, second=0, microsecond=0)
+    if fin <= ahora:
+        fin += dt.timedelta(days=1)
+    return max(1.0, (fin - ahora).total_seconds() / 3600 - 0.35)
+
+
+def entrenar(meta=None):
     raiz = TRAB / MODO
     if MODO == "prueba" and raiz.exists():
         shutil.rmtree(raiz)
     raiz.mkdir(parents=True, exist_ok=True)
-    meta = DATOS / "metadata.csv"
+    meta = meta or (DATOS / "metadata.csv")
     n = len(meta.read_text(encoding="utf-8").splitlines())
     prueba = MODO == "prueba"
-    ultimo = sorted(raiz.glob("lightning_logs/version_*/checkpoints/last.ckpt"), key=os.path.getmtime)
-    m = int(HORAS * 60)
-    cmd = [PY, "-m", "piper.train", "fit",
-           "--data.voice_name", "jarvis", "--data.csv_path", str(meta), "--data.audio_dir", str(DATOS / "wavs"),
-           "--model.sample_rate", "22050", "--data.espeak_voice", "es",
-           "--data.cache_dir", str(raiz / "cache"), "--data.config_path", str(raiz / "config.json"),
-           "--data.batch_size", "2" if prueba else "12",
-           "--data.num_test_examples", "1" if prueba else "4",
-           "--data.validation_split", "0.34" if prueba else "0.04",
-           "--model.mos_metric", "none",
-           "--trainer.max_epochs", "1" if prueba else "3000",
-           "--trainer.max_time", f"{m // 1440:02d}:{m // 60 % 24:02d}:{m % 60:02d}:00",
-           "--trainer.accelerator", "gpu", "--trainer.devices", "1", "--trainer.precision", "32",
-           "--trainer.check_val_every_n_epoch", "1" if prueba else "10",
-           "--trainer.default_root_dir", str(raiz)]
-    if ultimo and not prueba:
-        cmd += ["--ckpt_path", str(ultimo[-1])]  # reanuda si se cortó
-    else:
-        cmd += ["--model.warmstart_ckpt", checkpoint()]
-    log(f"clips: {n}; entrenando ({MODO})")
-    subprocess.run(cmd, check=True)
+    base_ck = None if prueba else checkpoint()
+    # Si la tarjeta se queda sin memoria (la comparte con otros programas), se reintenta con lotes más chicos.
+    for lote in (["2"] if prueba else ["10", "6", "3"]):
+        ultimo = sorted(raiz.glob("lightning_logs/version_*/checkpoints/last.ckpt"), key=os.path.getmtime)
+        m = int(horas_disponibles() * 60)
+        log(f"tiempo de entrenamiento: {m // 60} h {m % 60} min, lote {lote}")
+        cmd = [PY, "-m", "piper.train", "fit",
+               "--data.voice_name", "jarvis", "--data.csv_path", str(meta), "--data.audio_dir", str(DATOS / "wavs"),
+               "--model.sample_rate", "22050", "--data.espeak_voice", "es",
+               "--data.cache_dir", str(raiz / "cache"), "--data.config_path", str(raiz / "config.json"),
+               "--data.batch_size", lote,
+               "--data.num_test_examples", "1" if prueba else "4",
+               "--data.validation_split", "0.34" if prueba else "0.04",
+               "--model.mos_metric", "none",
+               "--trainer.max_epochs", "1" if prueba else "3000",
+               "--trainer.max_time", f"{m // 1440:02d}:{m // 60 % 24:02d}:{m % 60:02d}:00",
+               "--trainer.accelerator", "gpu", "--trainer.devices", "1", "--trainer.precision", "32",
+               "--trainer.check_val_every_n_epoch", "1" if prueba else "10",
+               "--trainer.default_root_dir", str(raiz)]
+        if ultimo and not prueba:
+            cmd += ["--ckpt_path", str(ultimo[-1])]  # reanuda donde quedó
+        else:
+            cmd += ["--model.warmstart_ckpt", base_ck or checkpoint()]
+        log(f"clips: {len(meta.read_text(encoding='utf-8').splitlines())}; entrenando ({MODO})")
+        if subprocess.run(cmd).returncode == 0:
+            break
+        log(f"el entrenamiento se detuvo con lote {lote}; reintentando")
+        if horas_disponibles() < 1.05:
+            break
     ult = sorted(raiz.glob("lightning_logs/version_*/checkpoints/last.ckpt"), key=os.path.getmtime)
     return raiz, ult[-1]
 
@@ -109,5 +149,5 @@ if __name__ == "__main__":
         raiz = TRAB / MODO
         ck = sorted(raiz.glob("lightning_logs/version_*/checkpoints/last.ckpt"), key=os.path.getmtime)[-1]
         probar(exportar(raiz, ck)); sys.exit(0)
-    raiz, ck = entrenar()
+    raiz, ck = entrenar(preparar() if MODO == "completo" else None)
     probar(exportar(raiz, ck))
