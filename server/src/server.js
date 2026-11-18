@@ -78,6 +78,9 @@ function formatAlert(raw) {
   return { text: raw.trim().slice(0, 500), secret: null };
 }
 
+// Qué voz usa la app de verdad (lo informa el iPhone).
+const vozInforme = { app: null, frases: [] };
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
@@ -94,7 +97,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/timings') {
       if (!authed(req)) return reply(res, 401, 'unauthorized');
-      return reply(res, 200, JSON.stringify({ timings: timingStats() }), 'application/json');
+      return reply(res, 200, JSON.stringify({ timings: timingStats(), voz: vozInforme }), 'application/json');
     }
     if (req.method === 'GET' && url.pathname === '/usage') {
       if (!authed(req)) return reply(res, 401, 'unauthorized');
@@ -217,6 +220,7 @@ server.on('upgrade', (req, socket, head) => {
       }
       if (!ok) {
         if (m.type === 'hello' && typeof m.token === 'string' && safeEq(m.token, config.token)) {
+          if (m.voz) vozInforme.app = { ...m.voz, at: new Date().toISOString() };
           ok = true;
           clearTimeout(authTimer);
           // Una sola app a la vez: una conexión vieja que quedó abierta se cierra (evita respuestas repetidas).
@@ -265,6 +269,10 @@ server.on('upgrade', (req, socket, head) => {
         case 'interpret':
           // Modo intérprete: frase en otro idioma → traducción al español en las gafas.
           if (typeof m.text === 'string' && m.text.trim()) translateAndSpeak(m.text.trim().slice(0, 2000), String(m.locale || 'en-US'));
+          break;
+        case 'voz':
+          vozInforme.frases.push({ at: new Date().toISOString(), fuente: String(m.fuente || ''), ms: Number(m.ms) || 0 });
+          if (vozInforme.frases.length > 40) vozInforme.frases.shift();
           break;
         case 'ping':
           conn.send('{"type":"pong"}');

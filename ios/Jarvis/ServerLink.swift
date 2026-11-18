@@ -129,6 +129,8 @@ final class ServerLink {
             // Autenticación: el token va en el primer mensaje (no en la URL).
             var hello: [String: Any] = ["type": "hello", "token": Settings.token]
             if let mem = savedMemory() { hello["restore"] = mem }
+            // Qué voz trae esta app (para verificar desde el servidor que suena la de Jarvis).
+            hello["voz"] = ["origen": LocalVoice.origin, "activa": LocalVoice.enabled]
             if let data = try? JSONSerialization.data(withJSONObject: hello),
                let s = String(data: data, encoding: .utf8) {
                 try? await t.send(.string(s))

@@ -111,6 +111,10 @@ final class AppModel: ObservableObject {
         speech.onInterpretExit = { [weak self] in Task { @MainActor in self?.handleInterpretExit() } }
 
         // --- Voz de salida ---
+        // Informe de la voz usada en cada frase: así se comprueba, sin adivinar, que suena la voz de Jarvis.
+        speaker.onRendered = { [weak self] source, ms in
+            self?.link.send(["type": "voz", "fuente": source, "ms": ms])
+        }
         speaker.onSpeakingChanged = { [weak self] speaking in
             guard let self else { return }
             if self.interpreterLocale != nil { self.speech.flush() } // no traducir la propia voz de Jarvis

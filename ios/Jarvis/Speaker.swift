@@ -6,7 +6,9 @@ import AVFoundation
 @MainActor
 final class Speaker {
     private let audio: AudioIO
-    private struct Item { let text: String; let render: Task<[AVAudioPCMBuffer], Never> }
+    private struct Item { let text: String; let render: Task<Rendered, Never> }
+    /// Audio de una frase y con qué voz salió (para comprobar que suena la voz de Jarvis).
+    struct Rendered: Sendable { let buffers: [AVAudioPCMBuffer]; let source: String; let ms: Int }
     private var queue: [Item] = []
     private var worker: Task<Void, Never>?
     private(set) var speaking = false
@@ -15,6 +17,8 @@ final class Speaker {
     var onSpeakingChanged: ((Bool) -> Void)?
     /// El servidor ofrece voz neuronal (ElevenLabs).
     var remoteTTSAvailable = false
+    /// Se llama por cada frase con la voz usada ("jarvis", "servidor" o "iphone") y lo que tardó en generarse.
+    var onRendered: ((String, Int) -> Void)?
 
     init(audio: AudioIO) {
         self.audio = audio
@@ -29,11 +33,13 @@ final class Speaker {
         guard !clean.isEmpty else { return }
         let remote = remoteTTSAvailable
         let local = LocalVoice.enabled
-        let task = Task.detached(priority: .userInitiated) { () -> [AVAudioPCMBuffer] in
+        let task = Task.detached(priority: .userInitiated) { () -> Rendered in
+            let t0 = Date()
+            let ms = { Int(Date().timeIntervalSince(t0) * 1000) }
             // 1) Voz de Jarvis dentro del iPhone: instantánea, sin internet ni servidor.
-            if local, let b = LocalVoice.shared.render(clean, speed: LocalVoice.speed(for: clean)), let c = AudioIO.Converter().convert(b) { return [c] }
-            if remote, let r = await Speaker.renderRemote(clean), !r.isEmpty { return r }
-            return await Speaker.renderSystem(clean)
+            if local, let b = LocalVoice.shared.render(clean, speed: LocalVoice.speed(for: clean)), let c = AudioIO.Converter().convert(b) { return Rendered(buffers: [c], source: "jarvis", ms: ms()) }
+            if remote, let r = await Speaker.renderRemote(clean), !r.isEmpty { return Rendered(buffers: r, source: "servidor", ms: ms()) }
+            return Rendered(buffers: await Speaker.renderSystem(clean), source: "iphone", ms: ms())
         }
         queue.append(Item(text: clean, render: task))
         startWorker()
@@ -59,8 +65,10 @@ final class Speaker {
         worker = Task { [weak self] in
             while let self, !Task.isCancelled, !self.queue.isEmpty {
                 let item = self.queue.removeFirst()
-                let buffers = await item.render.value
+                let rendered = await item.render.value
+                let buffers = rendered.buffers
                 if Task.isCancelled { break }
+                self.onRendered?(buffers.isEmpty ? "iphone" : rendered.source, rendered.ms)
                 if buffers.isEmpty {
                     await Speaker.speakDirect(item.text) // plan B: voz del sistema, sin refuerzo
                 } else {
