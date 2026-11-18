@@ -1,0 +1,7 @@
+total 62052
+drwxr-xr-x 3 runner runner     4096 Nov 18 00:02 .
+drwxr-xr-x 8 runner runner     4096 Nov 18 00:02 ..
+drwxr-xr-x 4 runner runner     4096 Nov 28  2023 espeak-ng-data
+-rw-r--r-- 1 runner runner 63516178 Nov 18 00:02 jarvis.onnx
+-rw-r--r-- 1 runner runner     5033 Nov 18 00:02 jarvis.onnx.json
+-rw-r--r-- 1 runner runner     1009 Nov 18 00:02 tokens.txt
