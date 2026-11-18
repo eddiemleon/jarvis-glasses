@@ -168,6 +168,13 @@ function makeSpeaker(id) {
         if (m) {
           emit([m[1]]);
           buf = buf.slice(m[0].length);
+        } else if (buf.length > 60) {
+          // Primera oración larga sin comas: se corta en una pausa natural (antes de "que", "y", "porque"…).
+          const n = buf.slice(25, 60).search(/\s(que|y|pero|porque|cuando|con|para|como|aunque)\s/);
+          if (n >= 0) {
+            emit([buf.slice(0, 25 + n)]);
+            buf = buf.slice(25 + n + 1);
+          }
         }
       }
     },
