@@ -26,7 +26,7 @@ enum Settings {
             K.readWhatsApp: true,
             K.boostDB: 9.0,
             K.maxSystemVolume: true,
-            K.musicFirst: true,
+            K.musicFirst: false,   // por defecto: micrófono de las gafas
             K.localVoice: true,
             K.speechRate: 0.52,
             K.listening: true,

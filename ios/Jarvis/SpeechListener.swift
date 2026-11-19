@@ -17,6 +17,8 @@ final class SpeechListener: @unchecked Sendable {
     /// Modo intérprete: cada frase de la otra persona (en su idioma) y la salida al oír "Jarvis".
     var onInterpret: (@Sendable (String) -> Void)?
     var onInterpretExit: (@Sendable () -> Void)?
+    /// Usted habla mientras Jarvis habla: se calla y lo escucha (la prioridad es suya).
+    var onBargeIn: (@Sendable (String) -> Void)?
 
     private let queue = DispatchQueue(label: "jarvis.speech")
     private let lock = NSLock()
@@ -32,6 +34,12 @@ final class SpeechListener: @unchecked Sendable {
     private var failures = 0
     private var forceServer = false
     private var running = false
+    // Interrupción por voz mientras Jarvis habla
+    private var bargeOn = false
+    private var bargeBase = 0
+    private var wordCount = 0
+    private var echoWords = Set<String>()
+    private var captureOffset = 0
 
     // Tiempos (segundos)
     var endSilence: TimeInterval = 0.75   // como una llamada: responde apenas usted termina (antes 1.15 s)
@@ -145,6 +153,7 @@ final class SpeechListener: @unchecked Sendable {
 
     private func startTask() {
         stopTask()
+        wordCount = 0; bargeBase = 0; captureOffset = 0
         guard running, let rec = recognizer, rec.isAvailable else {
             queue.asyncAfter(deadline: .now() + 2) { [weak self] in if self?.running == true, self?.task == nil { self?.startTask() } }
             return
@@ -195,11 +204,61 @@ final class SpeechListener: @unchecked Sendable {
         }
     }
 
+    /// Activa/desactiva la interrupción por voz. `echo` es lo que Jarvis está diciendo (para no confundir su propia voz con la suya).
+    func setBargeIn(_ on: Bool, echo: String = "") {
+        let ws = Self.echoSet(echo)
+        queue.async { [weak self] in
+            guard let self else { return }
+            if on && !self.bargeOn { self.bargeBase = self.wordCount }
+            self.bargeOn = on
+            self.echoWords = ws
+        }
+    }
+
+    /// true si lo oído es la propia voz de Jarvis (la mayoría de las palabras están en lo que él dice).
+    private func isEcho(_ words: [String]) -> Bool { Self.isEcho(words, echo: echoWords) }
+
+    static func isEcho(_ words: [String], echo: Set<String>) -> Bool {
+        let ws = words.map { normalize($0) }.filter { !$0.isEmpty }
+        guard !ws.isEmpty, !echo.isEmpty else { return false }
+        let hits = ws.filter { echo.contains($0) }.count
+        return Double(hits) / Double(ws.count) >= 0.6
+    }
+
+    /// ¿Lo nuevo que se oyó mientras Jarvis habla es usted interrumpiéndolo?
+    static func isBargeIn(_ nuevas: [String], echo: Set<String>) -> Bool {
+        let alto = ["para", "basta", "callate", "silencio", "detente", "espera", "alto", "no"].contains(normalize(nuevas.last ?? ""))
+        return (nuevas.count >= 2 || alto) && lastWake(in: nuevas) == nil && !isEcho(nuevas, echo: echo)
+    }
+
+    static func echoSet(_ text: String) -> Set<String> {
+        Set(text.split(whereSeparator: { !$0.isLetter }).map { normalize(String($0)) }.filter { !$0.isEmpty })
+    }
+
     private func process(words: [String]) {
+        wordCount = words.count
         switch mode {
         case .paused:
             return
         case .wake:
+            if bargeOn, words.count > bargeBase {
+                let nuevas = Array(words.dropFirst(bargeBase))
+                // Dos palabras o más que no son el eco de Jarvis: usted lo está interrumpiendo.
+                if Self.isBargeIn(nuevas, echo: echoWords) {
+                    bargeOn = false
+                    mode = .capture(fromWake: false)
+                    captureStarted = Date()
+                    lastText = ""
+                    lastChange = Date()
+                    let t = nuevas.joined(separator: " ")
+                    DispatchQueue.main.async { self.onBargeIn?(t) }
+                    // a partir de aquí cuenta solo lo que usted dice desde la interrupción
+                    bargeBase = 0
+                    updateCapture(t)
+                    captureOffset = words.count - nuevas.count
+                    return
+                }
+            }
             if let (idx, used) = Self.lastWake(in: words) {
                 mode = .capture(fromWake: true)
                 captureStarted = Date()
@@ -215,7 +274,7 @@ final class SpeechListener: @unchecked Sendable {
                     updateCapture(Array(words.dropFirst(idx + used)).joined(separator: " "))
                 }
             } else {
-                updateCapture(words.joined(separator: " "))
+                updateCapture(Array(words.dropFirst(min(captureOffset, words.count))).joined(separator: " "))
             }
         case .interpret:
             if Self.lastWake(in: words) != nil {

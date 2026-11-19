@@ -109,6 +109,7 @@ final class AppModel: ObservableObject {
         speech.onCaptureTimeout = { [weak self] in Task { @MainActor in self?.handleCaptureTimeout() } }
         speech.onInterpret = { [weak self] text in Task { @MainActor in self?.handleInterpret(text) } }
         speech.onInterpretExit = { [weak self] in Task { @MainActor in self?.handleInterpretExit() } }
+        speech.onBargeIn = { [weak self] text in Task { @MainActor in self?.handleBargeIn(text) } }
 
         // --- Voz de salida ---
         // Informe de la voz usada en cada frase: así se comprueba, sin adivinar, que suena la voz de Jarvis.
@@ -118,6 +119,8 @@ final class AppModel: ObservableObject {
         speaker.onSpeakingChanged = { [weak self] speaking in
             guard let self else { return }
             if self.interpreterLocale != nil { self.speech.flush() } // no traducir la propia voz de Jarvis
+            // Mientras Jarvis habla, usted puede interrumpirlo con solo hablar (sin decir "Jarvis").
+            self.speech.setBargeIn(speaking && self.interpreterLocale == nil, echo: self.assistantText)
             if speaking { if self.state != .alert { self.state = .speaking }; return }
             if self.announcing { self.announcing = false; self.afterAnnouncement() } else { self.checkTurnFinished() }
         }
@@ -210,12 +213,21 @@ final class AppModel: ObservableObject {
         assistantText = ""
     }
 
+    /// Usted habló encima de Jarvis: se calla al instante y lo escucha a usted.
+    private func handleBargeIn(_ text: String) {
+        bargeIn()
+        state = .listening
+        userText = text
+        assistantText = ""
+    }
+
     private func bargeIn() {
-        speaker.stop()
-        link.send(["type": "cancel"])
+        // primero se olvida el turno, luego se calla: así el fin del audio no reabre nada
         turnId = nil
         turnDone = false
         announcing = false
+        speaker.stop()
+        link.send(["type": "cancel"])
     }
 
     private func handleCommand(_ text: String) {
@@ -353,6 +365,7 @@ final class AppModel: ObservableObject {
             guard spokenKeys.insert(key).inserted else { return }
             if spokenKeys.count > 500 { spokenKeys.removeAll() }
             assistantText += (assistantText.isEmpty ? "" : " ") + t
+            if speaker.speaking { speech.setBargeIn(interpreterLocale == nil, echo: assistantText) }
             speaker.enqueue(t)
 
         case "done":
