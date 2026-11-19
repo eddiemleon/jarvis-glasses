@@ -9,7 +9,7 @@ DATOS = AQUI / "datos"
 TRAB = AQUI / "trabajo"
 MODO = sys.argv[1] if len(sys.argv) > 1 else "prueba"
 HORAS = float(os.environ.get("HORAS", "8"))
-FIN_HORA = os.environ.get("TERMINAR_A", "06:00" if MODO in ("completo", "continuar") else "")  # p. ej. "06:00": entrena hasta esa hora (deja margen para exportar)
+FIN_HORA = os.environ.get("TERMINAR_A", "06:00" if MODO in ("completo", "continuar") else "")  # "alta": usa HORAS  # p. ej. "06:00": entrena hasta esa hora (deja margen para exportar)
 PY = sys.executable
 
 
@@ -29,7 +29,8 @@ def checkpoint():
 def preparar():
     """Más datos con el estilo de Jarvis + revisión con Whisper: solo entra audio que dice exactamente su texto."""
     venv_xtts = AQUI / "venv" / "Scripts" / "python.exe"
-    for archivo, prefijo in (("jarvis_extra.txt", "e"), ("frases_noche2.txt", "d")):
+    for archivo, prefijo in (("jarvis_extra.txt", "e"), ("frases_noche2.txt", "d"),
+                             ("frases_noche3_a.txt", "f"), ("frases_noche3_b.txt", "g"), ("frases_noche3_c.txt", "h")):
         if (AQUI / archivo).exists():
             n = len([l for l in (AQUI / archivo).read_text(encoding="utf-8").splitlines() if l.strip()])
             log(f"generando {n} frases de {archivo}")
@@ -154,5 +155,5 @@ if __name__ == "__main__":
         raiz = TRAB / MODO
         ck = sorted(raiz.glob("lightning_logs/version_*/checkpoints/last.ckpt"), key=os.path.getmtime)[-1]
         probar(exportar(raiz, ck)); sys.exit(0)
-    raiz, ck = entrenar(preparar() if MODO in ("completo", "continuar") else None)
+    raiz, ck = entrenar(preparar() if MODO in ("completo", "continuar", "alta") else None)
     probar(exportar(raiz, ck))
