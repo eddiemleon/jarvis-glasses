@@ -207,7 +207,7 @@ export function toolDefs() {
     },
     {
       name: 'lion_encargar',
-      description: 'Pasa una pregunta o un encargo a un agente de Lion Capital (por defecto el Director, que coordina la sala, la fábrica de estrategias y el laboratorio). Úsala para delegar tareas o preguntar por el proyecto (fábrica, estrategias, noticias, fase del reto). La respuesta tarda: dile a Leon que se lo pasaste y que le avisarás cuando responda.',
+      description: 'Pasa una pregunta o un encargo a un agente de Lion Capital (por defecto el Director, que coordina la sala, la fábrica de estrategias y el laboratorio). Úsala para delegar tareas, preguntar por el proyecto (fábrica, estrategias, noticias, fase del reto) y cuando Leon diga "pregúntale a Claude": los agentes responden con Claude (su suscripción) y pueden leer los archivos del proyecto. La respuesta tarda: dile a Leon que se lo pasaste y que le avisarás cuando responda.',
       input_schema: { type: 'object', properties: { agente: { type: 'string', description: 'id del agente, por defecto director' }, texto: { type: 'string' } }, required: ['texto'] },
     },
     { name: 'lion_agentes', description: 'Lista los agentes de Lion Capital (id, nombre, rol) para saber a quién delegar.', input_schema: { type: 'object', properties: {} } },
