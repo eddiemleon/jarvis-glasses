@@ -301,7 +301,7 @@ final class SpeechListener: @unchecked Sendable {
     private func startTimer() {
         timer?.cancel()
         let t = DispatchSource.makeTimerSource(queue: queue)
-        t.schedule(deadline: .now() + 0.2, repeating: 0.2)
+        t.schedule(deadline: .now() + 0.05, repeating: 0.05)   // 50 ms: no agrega espera
         t.setEventHandler { [weak self] in self?.tick() }
         t.resume()
         timer = t
@@ -318,7 +318,7 @@ final class SpeechListener: @unchecked Sendable {
         case .capture(let fromWake):
             let silent = now.timeIntervalSince(lastChange)
             if !lastText.isEmpty {
-                if silent >= endSilence || now.timeIntervalSince(captureStarted) > maxCapture { finish(with: lastText) }
+                if silent >= Self.endpoint(for: lastText) || now.timeIntervalSince(captureStarted) > maxCapture { finish(with: lastText) }
             } else {
                 let limit = fromWake ? emptyTimeoutWake : emptyTimeoutFollowUp
                 if now.timeIntervalSince(captureStarted) > limit {
@@ -348,6 +348,19 @@ final class SpeechListener: @unchecked Sendable {
         mode = .wake
         startTask() // limpia el buffer; sigue escuchando "Jarvis" para poder interrumpir
         DispatchQueue.main.async { self.onCommand?(text) }
+    }
+
+    /// Fin de turno inteligente, como en una conversación: si la frase quedó completa responde casi al instante;
+    /// si quedó a medias ("dime cómo va el...") espera a que usted termine.
+    static func endpoint(for text: String) -> TimeInterval {
+        let ws = text.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map { normalize(String($0)) }.filter { !$0.isEmpty }
+        guard let last = ws.last else { return 0.9 }
+        let aMedias: Set<String> = ["y", "o", "de", "del", "al", "a", "en", "con", "para", "por", "que", "el", "la", "los", "las",
+                                    "un", "una", "mi", "tu", "su", "sus", "mis", "pero", "porque", "como", "cuando", "si", "sobre",
+                                    "entre", "hasta", "desde", "este", "esta", "ese", "esa", "muy", "mas", "es", "son", "eh", "este", "pues", "bueno"]
+        if aMedias.contains(last) { return 1.3 }
+        if ws.count < 2 { return 0.8 }
+        return 0.5
     }
 
     // MARK: Detección de "Jarvis"

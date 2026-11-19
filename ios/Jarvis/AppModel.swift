@@ -21,6 +21,7 @@ final class AppModel: ObservableObject {
     @Published var serverModel = ""
     @Published var routeName = "—"
     @Published var usingGlassesMic = false
+    @Published var audioDiagnostic = ""
     @Published var errorText: String?
     @Published var pausedUntil: Date?
     @Published var permissionsOK = false
@@ -201,6 +202,7 @@ final class AppModel: ObservableObject {
     func refreshRoute() {
         routeName = audio.inputName
         usingGlassesMic = audio.usingBluetoothMic
+        audioDiagnostic = audio.diagnostic
     }
 
     // MARK: Flujo de conversación

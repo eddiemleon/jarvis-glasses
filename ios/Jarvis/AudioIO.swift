@@ -32,6 +32,10 @@ final class AudioIO: NSObject {
     private var lastRebuild = Date.distantPast
     private var rebuildPending = false
     private var musicTimer: DispatchSourceTimer?
+    /// Diagnóstico del micrófono: cuándo se pidió y cuánto tardó en quedar en las gafas.
+    private var askedAt: Date?
+    private(set) var connectSeconds: Double?
+    private(set) var retries = 0
 
     override init() {
         let desc = AudioComponentDescription(
@@ -65,6 +69,7 @@ final class AudioIO: NSObject {
     /// Solo cambia si el usuario mueve el interruptor en Ajustes.
     private func checkOtherAudio() {
         guard running else { return }
+        ensureGlassesMic()
         let want = Settings.musicFirst
         guard want != musicMode, !player.isPlaying else { return }
         rebuild(resetSession: true)   // start() aplica el modo nuevo
@@ -84,6 +89,7 @@ final class AudioIO: NSObject {
         try s.setCategory(.playAndRecord, mode: .default, options: opts)
         try s.setActive(true, options: [])
         sessionOptions = opts
+        askedAt = Date(); connectSeconds = nil
         preferGlassesInput()
     }
 
@@ -95,6 +101,34 @@ final class AudioIO: NSObject {
         let pick = hfp.first { $0.portName.localizedCaseInsensitiveContains("ray-ban") || $0.portName.localizedCaseInsensitiveContains("meta") } ?? hfp.first
         // Solo si hace falta: pedirlo de nuevo provoca otro cambio de ruta (y un corte de audio).
         if let pick, s.currentRoute.inputs.first?.uid != pick.uid { try? s.setPreferredInput(pick) }
+    }
+
+    /// Vigilante (cada 2 s): si las gafas están disponibles y el micrófono no está en ellas, lo vuelve a pedir.
+    /// Así nunca se queda pegado en el micrófono del iPhone.
+    private func ensureGlassesMic() {
+        guard !musicMode else { return }
+        if usingBluetoothMic {
+            if connectSeconds == nil, let a = askedAt { connectSeconds = Date().timeIntervalSince(a); onRouteChanged?() }
+            return
+        }
+        let s = AVAudioSession.sharedInstance()
+        guard (s.availableInputs ?? []).contains(where: { $0.portType == .bluetoothHFP }) else { return }
+        retries += 1
+        preferGlassesInput()
+        onRouteChanged?()
+    }
+
+    /// Una línea con los hechos (para una captura): entrada, salida, gafas disponibles, tiempo de conexión.
+    var diagnostic: String {
+        let s = AVAudioSession.sharedInstance()
+        let inp = s.currentRoute.inputs.first.map { "\($0.portName) [\($0.portType.rawValue)]" } ?? "—"
+        let out = s.currentRoute.outputs.first.map { "\($0.portName) [\($0.portType.rawValue)]" } ?? "—"
+        let hfp = (s.availableInputs ?? []).filter { $0.portType == .bluetoothHFP }.map(\.portName)
+        var t = "Mic: \(inp) · Sale: \(out) · Gafas disponibles: \(hfp.isEmpty ? "ninguna" : hfp.joined(separator: ", "))"
+        t += " · Modo: \(musicMode ? "música (mic iPhone)" : "gafas") · \(Int(s.sampleRate)) Hz"
+        if let c = connectSeconds { t += String(format: " · conectó en %.1f s", c) }
+        if retries > 0 { t += " · reintentos \(retries)" }
+        return t
     }
 
     var inputName: String { AVAudioSession.sharedInstance().currentRoute.inputs.first?.portName ?? "—" }
@@ -252,7 +286,11 @@ final class AudioIO: NSObject {
         // provoca la propia app al configurar el audio y reaccionar a ellos crearía un bucle.
         let raw = n.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0
         let reason = AVAudioSession.RouteChangeReason(rawValue: raw) ?? .unknown
-        guard reason == .newDeviceAvailable || reason == .oldDeviceUnavailable else { return }
+        guard reason == .newDeviceAvailable || reason == .oldDeviceUnavailable else {
+            // Otros cambios (p. ej. cuando el micrófono pasa a las gafas): solo se actualiza la pantalla.
+            DispatchQueue.main.async { [weak self] in self?.onRouteChanged?() }
+            return
+        }
         DispatchQueue.main.async { [weak self] in
             self?.preferGlassesInput()
             self?.onRouteChanged?()

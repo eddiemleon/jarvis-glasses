@@ -72,6 +72,7 @@ private struct InnerBody: View {
     }
 
     private var chips: some View {
+        VStack(alignment: .leading, spacing: 4) {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 chip("eyeglasses", model.usingGlassesMic ? "Gafas (mic)" : "Sin mic de gafas", model.usingGlassesMic)
@@ -81,6 +82,9 @@ private struct InnerBody: View {
                 if live.isLive { chip("dot.radiowaves.left.and.right", "EN VIVO · \(live.viewers)", true, tint: .red) }
                 if let l = model.interpreterLocale { chip("character.bubble", "Intérprete · \(l) — di \"Jarvis\" para salir", true, tint: .orange) }
             }
+        }
+        // Diagnóstico del audio (con una captura se ve exactamente qué micrófono está usando)
+        Text(model.audioDiagnostic).font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(3)
         }
     }
 

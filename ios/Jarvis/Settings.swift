@@ -21,6 +21,11 @@ enum Settings {
     static let d = UserDefaults.standard
 
     static func registerDefaults() {
+        // Una sola vez: quien tenía activado "Música y videos sin interrupciones" vuelve al micrófono de las gafas.
+        if !d.bool(forKey: "migr_mic_gafas_2") {
+            d.set(false, forKey: K.musicFirst)
+            d.set(true, forKey: "migr_mic_gafas_2")
+        }
         d.register(defaults: [
             K.followUp: true,
             K.readWhatsApp: true,
