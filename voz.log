@@ -1,0 +1,21 @@
+15:58:57 cargando XTTS-v2 en cpu (la primera vez descarga ~1.8 GB)
+Fetching 9 files:   0%|          | 0/9 [00:00<?, ?it/s]Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Fetching 9 files:  78%|███████▊  | 7/9 [00:00<00:00, 16.37it/s]Fetching 9 files: 100%|██████████| 9/9 [00:07<00:00,  1.00s/it]Fetching 9 files: 100%|██████████| 9/9 [00:07<00:00,  1.28it/s]
+[transformers] Model config: bos_token_id must be `None` or an integer within the vocabulary (between 0 and 255), got 50256. This may result in unexpected behavior.
+[transformers] Model config: eos_token_id must be `None` or an integer within the vocabulary (between 0 and 255), got 50256. This may result in unexpected behavior.
+[transformers] Model config: bos_token_id must be `None` or an integer within the vocabulary (between 0 and 607), got 50256. This may result in unexpected behavior.
+[transformers] Model config: eos_token_id must be `None` or an integer within the vocabulary (between 0 and 607), got 50256. This may result in unexpected behavior.
+15:59:20 diagnostico: torch 2.6.0+cpu, cuda None, modelo en cpu
+15:59:38   trozo 6 letras en 18.4s (temp 0.78)
+15:59:38 frase demasiado larga (7.3s > 1.9s), regenerando
+15:59:45   trozo 6 letras en 6.3s (temp 0.62)
+15:59:45 frase demasiado larga (2.3s > 1.9s), regenerando
+15:59:53   trozo 6 letras en 8.0s (temp 0.5)
+15:59:53 frase demasiado larga (2.9s > 1.9s), regenerando
+15:59:53 voz lista (calentamiento 32.7s)
+16:00:16   trozo 92 letras en 23.0s (temp 0.78)
+16:00:16 muestra_1.wav: 23.0s
+16:00:39   trozo 82 letras en 23.1s (temp 0.78)
+16:00:39 muestra_2.wav: 23.1s
+16:00:59   trozo 71 letras en 20.0s (temp 0.78)
+16:00:59 muestra_3.wav: 20.0s
