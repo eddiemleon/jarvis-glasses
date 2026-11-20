@@ -40,4 +40,22 @@ final class BargeInTests: XCTestCase {
         XCTAssertFalse(Settings.musicFirst, "Debe volver al micrófono de las gafas")
         print("JARVIS-CHECK micrófono: modo gafas forzado")
     }
+
+    func testNoAudioCutLoop() {
+        // Mientras YouTube/música suena, jamás se mueve la ruta (eso cortaba el video cada 2 s).
+        XCTAssertFalse(AudioIO.shouldRetryGlassesMic(glassesAvailable: true, otherAppPlaying: true, attempts: 0, sinceLast: 100))
+        // Máximo 3 intentos y separados al menos 6 s.
+        XCTAssertTrue(AudioIO.shouldRetryGlassesMic(glassesAvailable: true, otherAppPlaying: false, attempts: 0, sinceLast: 100))
+        XCTAssertFalse(AudioIO.shouldRetryGlassesMic(glassesAvailable: true, otherAppPlaying: false, attempts: 1, sinceLast: 2))
+        XCTAssertFalse(AudioIO.shouldRetryGlassesMic(glassesAvailable: true, otherAppPlaying: false, attempts: 3, sinceLast: 100))
+        // Simulación de 60 s con las gafas disponibles pero sin conectar: como mucho 3 movimientos de ruta.
+        var intentos = 0, ultimo = -1000.0
+        for t in stride(from: 0.0, to: 60.0, by: 2.0) where AudioIO.shouldRetryGlassesMic(glassesAvailable: true, otherAppPlaying: false, attempts: intentos, sinceLast: t - ultimo) {
+            intentos += 1; ultimo = t
+        }
+        XCTAssertLessThanOrEqual(intentos, 3)
+        // Freno de reinicios del motor: al tercero en 20 s espera 30 s.
+        XCTAssertEqual(AudioIO.rebuildDelay(recent: 3, sinceLast: 0.5), 30)
+        print("JARVIS-CHECK cortes de audio: en 60 s máximo \(intentos) cambios de ruta; ninguno con video sonando")
+    }
 }

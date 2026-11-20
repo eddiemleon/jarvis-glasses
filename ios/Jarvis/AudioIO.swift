@@ -31,11 +31,17 @@ final class AudioIO: NSObject {
     private var sessionOptions: AVAudioSession.CategoryOptions?
     private var lastRebuild = Date.distantPast
     private var rebuildPending = false
+    private var recentRebuilds: [Date] = []
+
+    static func rebuildDelay(recent: Int, sinceLast: TimeInterval) -> TimeInterval {
+        recent >= 3 ? 30 : max(0.3, 2.0 - sinceLast)
+    }
     private var musicTimer: DispatchSourceTimer?
     /// Diagnóstico del micrófono: cuándo se pidió y cuánto tardó en quedar en las gafas.
     private var askedAt: Date?
     private(set) var connectSeconds: Double?
     private(set) var retries = 0
+    private var lastRetry = Date.distantPast
 
     override init() {
         let desc = AudioComponentDescription(
@@ -89,7 +95,7 @@ final class AudioIO: NSObject {
         try s.setCategory(.playAndRecord, mode: .default, options: opts)
         try s.setActive(true, options: [])
         sessionOptions = opts
-        askedAt = Date(); connectSeconds = nil
+        askedAt = Date(); connectSeconds = nil; retries = 0
         preferGlassesInput()
     }
 
@@ -100,7 +106,9 @@ final class AudioIO: NSObject {
         let hfp = (s.availableInputs ?? []).filter { $0.portType == .bluetoothHFP }
         let pick = hfp.first { $0.portName.localizedCaseInsensitiveContains("ray-ban") || $0.portName.localizedCaseInsensitiveContains("meta") } ?? hfp.first
         // Solo si hace falta: pedirlo de nuevo provoca otro cambio de ruta (y un corte de audio).
-        if let pick, s.currentRoute.inputs.first?.uid != pick.uid { try? s.setPreferredInput(pick) }
+        guard let pick, s.currentRoute.inputs.first?.uid != pick.uid else { return }
+        if s.isOtherAudioPlaying && s.preferredInput?.uid == pick.uid { return }   // ya pedido: no volver a mover la ruta
+        try? s.setPreferredInput(pick)
     }
 
     /// Vigilante (cada 2 s): si las gafas están disponibles y el micrófono no está en ellas, lo vuelve a pedir.
@@ -112,10 +120,20 @@ final class AudioIO: NSObject {
             return
         }
         let s = AVAudioSession.sharedInstance()
-        guard (s.availableInputs ?? []).contains(where: { $0.portType == .bluetoothHFP }) else { return }
+        let hfp = (s.availableInputs ?? []).contains(where: { $0.portType == .bluetoothHFP })
+        guard Self.shouldRetryGlassesMic(glassesAvailable: hfp, otherAppPlaying: s.isOtherAudioPlaying,
+                                         attempts: retries, sinceLast: Date().timeIntervalSince(lastRetry)) else { return }
         retries += 1
+        lastRetry = Date()
         preferGlassesInput()
         onRouteChanged?()
+    }
+
+    /// Cuándo volver a pedir el micrófono de las gafas. Cada pedido mueve la ruta de audio y CORTA un instante
+    /// el sonido de las demás apps; por eso: nunca mientras otra app reproduce (YouTube, música), máximo 3
+    /// intentos por conexión y separados al menos 6 s. Antes se pedía cada 2 s sin límite: eso cortaba el video.
+    static func shouldRetryGlassesMic(glassesAvailable: Bool, otherAppPlaying: Bool, attempts: Int, sinceLast: TimeInterval) -> Bool {
+        glassesAvailable && !otherAppPlaying && attempts < 3 && sinceLast >= 6
     }
 
     /// Una línea con los hechos (para una captura): entrada, salida, gafas disponibles, tiempo de conexión.
@@ -164,8 +182,13 @@ final class AudioIO: NSObject {
     func rebuild(resetSession: Bool = false) {
         if resetSession { sessionOptions = nil }
         guard running, !rebuildPending else { return }
+        // Freno anti-bucle: si se reinició 3 veces en 20 s, algo está rebotando (cada reinicio corta el audio):
+        // se espera 30 s antes del siguiente.
+        let now = Date()
+        recentRebuilds = recentRebuilds.filter { now.timeIntervalSince($0) < 20 }
         rebuildPending = true
-        let wait = max(0.3, 2.0 - Date().timeIntervalSince(lastRebuild))
+        let wait = Self.rebuildDelay(recent: recentRebuilds.count, sinceLast: now.timeIntervalSince(lastRebuild))
+        recentRebuilds.append(now.addingTimeInterval(wait))
         DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
             guard let self else { return }
             self.rebuildPending = false
@@ -292,6 +315,7 @@ final class AudioIO: NSObject {
             return
         }
         DispatchQueue.main.async { [weak self] in
+            self?.retries = 0   // gafas conectadas/desconectadas: nuevo presupuesto de intentos
             self?.preferGlassesInput()
             self?.onRouteChanged?()
         }
