@@ -75,7 +75,10 @@ private struct InnerBody: View {
         VStack(alignment: .leading, spacing: 4) {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                chip("eyeglasses", model.usingGlassesMic ? "Gafas (mic)" : "Sin mic de gafas", model.usingGlassesMic)
+                // Un toque: lista de audio del sistema para elegir las gafas (sin ir a Ajustes)
+                chip("eyeglasses", model.usingGlassesMic ? "Gafas (mic)" : "Conectar gafas ›", model.usingGlassesMic,
+                     tint: model.usingGlassesMic ? nil : .orange)
+                    .onTapGesture { AudioRoute.showPicker() }
                 chip("link", glasses.registered ? (glasses.deviceConnected ? "SDK Meta" : "Registrada") : "Sin registrar", glasses.deviceConnected)
                 chip("server.rack", model.serverConnected ? (model.serverModel.isEmpty ? "Servidor" : model.serverModel) : "Sin servidor", model.serverConnected)
                 chip("location.fill", loc.authorized ? (loc.place.isEmpty ? "GPS" : loc.place) : "GPS apagado", loc.authorized)
@@ -84,6 +87,10 @@ private struct InnerBody: View {
             }
         }
         // Diagnóstico del audio (con una captura se ve exactamente qué micrófono está usando)
+        if !model.usingGlassesMic && model.audioDiagnostic.contains("Gafas disponibles: ninguna") {
+            Text("El iPhone no ve las gafas. Toque \"Conectar gafas\" y elija Ray-Ban Meta. Si no aparecen: póngaselas y abra la app Meta AI un momento.")
+                .font(.caption2).foregroundStyle(.orange)
+        }
         Text(model.audioDiagnostic).font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(3)
         }
     }
