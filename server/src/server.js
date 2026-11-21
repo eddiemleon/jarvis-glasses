@@ -12,6 +12,7 @@ import { usageSnapshot, providers, resolveBrains } from './llm.js';
 import { startReminderLoop } from './reminders.js';
 import { startRoutineLoop } from './routines.js';
 import { translateAndSpeak } from './tools.js';
+import { lionEstado, lionAgentes, lionEnabled } from './lion.js';
 
 if (config.token.length < 16) {
   // Plug and play: si no hay contraseña, se crea una sola vez y se guarda.
@@ -165,7 +166,22 @@ const server = http.createServer(async (req, res) => {
       try { b = JSON.parse((await readBody(req, 5_000)).toString('utf8') || '{}'); } catch {}
       if (!b || !/^https:\/\//.test(String(b.url || '')) || String(b.key || '').length < 12) return reply(res, 400, 'url https y key requeridos');
       store.setLion(b);
-      return reply(res, 200, JSON.stringify({ ok: true }), 'application/json');
+      // Prueba de punta a punta: el servidor habla con la sala ahora mismo y dice si de verdad funciona.
+      let prueba;
+      try {
+        const e = await lionEstado();
+        const ag = await lionAgentes().catch(() => []);
+        prueba = { sala: true, mt5: !!e.conectado, motivo: e.motivo || null, agentes: (ag || []).length };
+      } catch (err) { prueba = { sala: false, error: String(err.message || err) }; }
+      return reply(res, 200, JSON.stringify({ ok: true, prueba }), 'application/json');
+    }
+    if (url.pathname === '/lion/status' && req.method === 'GET') {
+      if (!authed(req)) return reply(res, 401, 'unauthorized');
+      if (!lionEnabled()) return reply(res, 200, JSON.stringify({ configurado: false }), 'application/json');
+      try {
+        const e = await lionEstado();
+        return reply(res, 200, JSON.stringify({ configurado: true, sala: true, mt5: !!e.conectado, motivo: e.motivo || null }), 'application/json');
+      } catch (err) { return reply(res, 200, JSON.stringify({ configurado: true, sala: false, error: String(err.message || err) }), 'application/json'); }
     }
     if (url.pathname === '/voice/register' && req.method === 'POST') {
       if (!authed(req)) return reply(res, 401, 'unauthorized');
