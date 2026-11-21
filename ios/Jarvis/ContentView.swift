@@ -34,6 +34,7 @@ private struct InnerBody: View {
     @ObservedObject var live: LiveService
     @ObservedObject var glasses: GlassesService
     @ObservedObject var loc: LocationService
+    @State private var chipNote = ""
 
     private var stateText: String {
         switch model.state {
@@ -79,9 +80,30 @@ private struct InnerBody: View {
                 chip("eyeglasses", model.usingGlassesMic ? "Gafas (mic)" : "Conectar gafas ›", model.usingGlassesMic,
                      tint: model.usingGlassesMic ? nil : .orange)
                     .onTapGesture { AudioRoute.showPicker() }
-                chip("link", glasses.registered ? (glasses.deviceConnected ? "SDK Meta" : "Registrada") : "Sin registrar", glasses.deviceConnected)
-                chip("server.rack", model.serverConnected ? (model.serverModel.isEmpty ? "Servidor" : model.serverModel) : "Sin servidor", model.serverConnected)
-                chip("location.fill", loc.authorized ? (loc.place.isEmpty ? "GPS" : loc.place) : "GPS apagado", loc.authorized)
+                // Cámara/kit de Meta: sin registrar → registra; registrada sin conexión → dice exactamente qué falta
+                chip("link", glasses.registered ? (glasses.deviceConnected ? "Cámara lista" : "Cámara: revisar ›") : "Registrar gafas ›", glasses.deviceConnected,
+                     tint: glasses.deviceConnected ? nil : .orange)
+                    .onTapGesture {
+                        if !glasses.registered {
+                            chipNote = "Abriendo Meta AI para registrar las gafas…"
+                            Task { if let n = await glasses.register() { chipNote = n } }
+                        } else if !glasses.deviceConnected {
+                            chipNote = "Cámara: " + GlassesService.deviceReport()
+                        } else { chipNote = "La cámara de las gafas está lista." }
+                    }
+                // Servidor: un toque reconecta
+                chip("server.rack", model.serverConnected ? (model.serverModel.isEmpty ? "Servidor" : model.serverModel) : "Reconectar ›", model.serverConnected,
+                     tint: model.serverConnected ? nil : .orange)
+                    .onTapGesture {
+                        chipNote = model.serverConnected ? "Conectado al servidor (\(model.serverModel))." : "Reconectando con el servidor…"
+                        if !model.serverConnected { model.link.reconnect() }
+                    }
+                // GPS: si está apagado, abre el permiso de ubicación de Jarvis
+                chip("location.fill", loc.authorized ? (loc.place.isEmpty ? "GPS" : loc.place) : "Activar GPS ›", loc.authorized,
+                     tint: loc.authorized ? nil : .orange)
+                    .onTapGesture {
+                        if !loc.authorized, let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) }
+                    }
                 if live.isLive { chip("dot.radiowaves.left.and.right", "EN VIVO · \(live.viewers)", true, tint: .red) }
                 if let l = model.interpreterLocale { chip("character.bubble", "Intérprete · \(l) — di \"Jarvis\" para salir", true, tint: .orange) }
             }
@@ -90,6 +112,10 @@ private struct InnerBody: View {
         if !model.usingGlassesMic && model.audioDiagnostic.contains("Gafas disponibles: ninguna") {
             Text("El iPhone no ve las gafas. Toque \"Conectar gafas\" y elija Ray-Ban Meta. Si no aparecen: póngaselas y abra la app Meta AI un momento.")
                 .font(.caption2).foregroundStyle(.orange)
+        }
+        if !chipNote.isEmpty {
+            Text(chipNote).font(.caption2).foregroundStyle(.cyan).lineLimit(4)
+                .onTapGesture { chipNote = "" }
         }
         Text(model.audioDiagnostic).font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(3)
         }
