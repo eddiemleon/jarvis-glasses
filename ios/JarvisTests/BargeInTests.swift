@@ -58,4 +58,17 @@ final class BargeInTests: XCTestCase {
         XCTAssertEqual(AudioIO.rebuildDelay(recent: 3, sinceLast: 0.5), 30)
         print("JARVIS-CHECK cortes de audio: en 60 s máximo \(intentos) cambios de ruta; ninguno con video sonando")
     }
+
+    func testYieldsMicToGamesAndCalls() {
+        typealias A = AudioIO.YieldAction
+        // Roblox / llamada toma el audio: Jarvis suelta el micrófono
+        XCTAssertEqual(AudioIO.yieldAction(otherAppPrimary: true, yielded: false, musicMode: false, speaking: false), A.yield)
+        // ... y lo retoma cuando la otra app termina
+        XCTAssertEqual(AudioIO.yieldAction(otherAppPrimary: false, yielded: true, musicMode: false, speaking: false), A.resume)
+        // no corta a Jarvis a mitad de una frase
+        XCTAssertEqual(AudioIO.yieldAction(otherAppPrimary: true, yielded: false, musicMode: false, speaking: true), A.none)
+        // modo música: convive como antes
+        XCTAssertEqual(AudioIO.yieldAction(otherAppPrimary: true, yielded: false, musicMode: true, speaking: false), A.none)
+        print("JARVIS-CHECK cede el micrófono a juegos y llamadas")
+    }
 }

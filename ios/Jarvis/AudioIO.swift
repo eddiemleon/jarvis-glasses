@@ -41,6 +41,9 @@ final class AudioIO: NSObject {
     private var askedAt: Date?
     private(set) var connectSeconds: Double?
     private(set) var retries = 0
+    /// true mientras Jarvis le cede el micrófono a otra app (Roblox, llamadas de WhatsApp, juegos con chat de voz).
+    private(set) var yielded = false
+    var onYieldChanged: ((Bool) -> Void)?
     private var lastRetry = Date.distantPast
 
     override init() {
@@ -63,6 +66,7 @@ final class AudioIO: NSObject {
         nc.addObserver(self, selector: #selector(interruption(_:)), name: AVAudioSession.interruptionNotification, object: nil)
         nc.addObserver(self, selector: #selector(engineConfigChanged), name: .AVAudioEngineConfigurationChange, object: engine)
         nc.addObserver(self, selector: #selector(mediaReset), name: AVAudioSession.mediaServicesWereResetNotification, object: nil)
+        nc.addObserver(self, selector: #selector(secondaryHint), name: AVAudioSession.silenceSecondaryAudioHintNotification, object: nil)
 
         let t = DispatchSource.makeTimerSource(queue: .main)
         t.schedule(deadline: .now() + 2, repeating: 2)
@@ -75,6 +79,8 @@ final class AudioIO: NSObject {
     /// Solo cambia si el usuario mueve el interruptor en Ajustes.
     private func checkOtherAudio() {
         guard running else { return }
+        applyYield()
+        if yielded { return }
         ensureGlassesMic()
         let want = Settings.musicFirst
         guard want != musicMode, !player.isPlaying else { return }
@@ -146,6 +152,7 @@ final class AudioIO: NSObject {
         t += " · Modo: \(musicMode ? "música (mic iPhone)" : "gafas") · \(Int(s.sampleRate)) Hz"
         if let c = connectSeconds { t += String(format: " · conectó en %.1f s", c) }
         if retries > 0 { t += " · reintentos \(retries)" }
+        if yielded { t = "Micrófono cedido a otra app (juego/llamada); Jarvis vuelve solo al terminar · " + t }
         return t
     }
 
@@ -157,6 +164,7 @@ final class AudioIO: NSObject {
 
     func start() throws {
         running = true
+        if yielded { return }   // el micrófono es de la otra app hasta que termine
         try configureSession()
         if !tapInstalled {
             let input = engine.inputNode
@@ -226,7 +234,11 @@ final class AudioIO: NSObject {
     }
 
     func schedule(_ buffer: AVAudioPCMBuffer, completion: (@Sendable () -> Void)? = nil) {
-        if !engine.isRunning { try? start() }
+        if !engine.isRunning {
+            if yielded {   // una alerta mientras otra app usa el micrófono: solo altavoz, sin tomar el micrófono
+                try? configureSession(); engine.prepare(); try? engine.start()
+            } else { try? start() }
+        }
         player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { _ in completion?() }
         if !player.isPlaying { player.play() }
     }
@@ -329,6 +341,55 @@ final class AudioIO: NSObject {
         // Al conectarse/desconectarse el Bluetooth cambia el formato de entrada: hay que reinstalar el tap.
         DispatchQueue.main.async { [weak self] in self?.rebuild() }
     }
+    @objc private func secondaryHint() {
+        DispatchQueue.main.async { [weak self] in self?.applyYield() }
+    }
+
+    enum YieldAction: Equatable { case yield, resume, none }
+
+    /// Ceder el micrófono: cuando otra app toma el audio como principal (chat de voz de Roblox, una llamada,
+    /// un juego), dos apps grabando a la vez dañan el anulador de eco de la otra y se oye doble / con ruido.
+    /// En modo gafas Jarvis suelta el micrófono y la sesión, y lo retoma solo cuando la otra app termina.
+    /// En modo "Música y videos sin interrupciones" se mantiene como antes (convive con la otra app).
+    static func yieldAction(otherAppPrimary: Bool, yielded: Bool, musicMode: Bool, speaking: Bool) -> YieldAction {
+        if musicMode { return yielded ? .resume : .none }
+        if otherAppPrimary && !yielded && !speaking { return .yield }
+        if !otherAppPrimary && yielded { return .resume }
+        return .none
+    }
+
+    private func applyYield() {
+        guard running else { return }
+        let s = AVAudioSession.sharedInstance()
+        switch Self.yieldAction(otherAppPrimary: s.secondaryAudioShouldBeSilencedHint, yielded: yielded,
+                                musicMode: Settings.musicFirst, speaking: player.isPlaying) {
+        case .yield:
+            yielded = true
+            if tapInstalled {
+                engine.inputNode.removeTap(onBus: 0)
+                player.removeTap(onBus: 0)
+                tapInstalled = false
+            }
+            engine.stop()
+            try? s.setActive(false, options: [.notifyOthersOnDeactivation])
+            sessionOptions = nil
+            onYieldChanged?(true)
+            onRouteChanged?()
+        case .resume:
+            yielded = false
+            try? start()
+            onYieldChanged?(false)
+            onRouteChanged?()
+        case .none:
+            // terminó una alerta hablada mientras la otra app tenía el micrófono: se vuelve a soltar todo
+            if yielded && engine.isRunning && !player.isPlaying {
+                engine.stop()
+                try? s.setActive(false, options: [.notifyOthersOnDeactivation])
+                sessionOptions = nil
+            }
+        }
+    }
+
     @objc private func mediaReset() {
         DispatchQueue.main.async { [weak self] in self?.rebuild(resetSession: true) }
     }
