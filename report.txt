@@ -1,0 +1,93 @@
+run=45721877301 commit=89ca6506bf75a31d9675f0f6330dd4449e1fc37c fecha=2026-11-25T23:44:37Z
+== compilación ==
+** BUILD SUCCEEDED **
+JARVIS-CHECK logo: OK
+== pruebas ==
+Test Case '-[JarvisTests.BargeInTests testGlassesMicIsDefault]' started.
+Test Case '-[JarvisTests.BargeInTests testGlassesMicIsDefault]' passed (0.009 seconds).
+Test Case '-[JarvisTests.BargeInTests testMicMigrationForcesGlasses]' started.
+JARVIS-CHECK micrófono: modo gafas forzado
+Test Case '-[JarvisTests.BargeInTests testMicMigrationForcesGlasses]' passed (0.012 seconds).
+Test Case '-[JarvisTests.BargeInTests testNoAudioCutLoop]' started.
+JARVIS-CHECK cortes de audio: en 60 s máximo 3 cambios de ruta; ninguno con video sonando
+Test Case '-[JarvisTests.BargeInTests testNoAudioCutLoop]' passed (0.005 seconds).
+Test Case '-[JarvisTests.BargeInTests testOwnEchoIgnored]' started.
+JARVIS-CHECK interrupción: el eco de Jarvis se ignora
+Test Case '-[JarvisTests.BargeInTests testOwnEchoIgnored]' passed (0.241 seconds).
+Test Case '-[JarvisTests.BargeInTests testSmartEndOfTurn]' started.
+JARVIS-CHECK fin de turno: 0.5 s si la frase está completa, espera si quedó a medias
+Test Case '-[JarvisTests.BargeInTests testSmartEndOfTurn]' passed (0.007 seconds).
+Test Case '-[JarvisTests.BargeInTests testUserInterrupts]' started.
+JARVIS-CHECK interrupción: su voz corta la respuesta
+Test Case '-[JarvisTests.BargeInTests testUserInterrupts]' passed (0.003 seconds).
+Test Case '-[JarvisTests.BargeInTests testYieldsMicToGamesAndCalls]' started.
+JARVIS-CHECK cede el micrófono a juegos y llamadas
+Test Case '-[JarvisTests.BargeInTests testYieldsMicToGamesAndCalls]' passed (0.003 seconds).
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.279 (0.292) seconds
+Test Case '-[JarvisTests.GlassesMockTests test1_SDKStartsAndSeesGlasses]' started.
+Test Case '-[JarvisTests.GlassesMockTests test1_SDKStartsAndSeesGlasses]' passed (5.215 seconds).
+Test Case '-[JarvisTests.GlassesMockTests test2_PhotoFlow]' started.
+JARVIS-CHECK foto: sesión y cámara OK; el simulador de Meta no entregó imagen (error conocido de Meta)
+Test Case '-[JarvisTests.GlassesMockTests test2_PhotoFlow]' passed (11.651 seconds).
+Test Case '-[JarvisTests.GlassesMockTests test3_LiveStreamAllQualities]' started.
+JARVIS-CHECK video fluida: cámara OK, cuadros recibidos=0
+JARVIS-CHECK video equilibrada: cámara OK, cuadros recibidos=0
+JARVIS-CHECK video maxima: cámara OK, cuadros recibidos=0
+Test Case '-[JarvisTests.GlassesMockTests test3_LiveStreamAllQualities]' passed (28.029 seconds).
+Test Case '-[JarvisTests.GlassesMockTests test4_ViewThenLiveKeepsSameCamera]' started.
+JARVIS-CHECK vista→transmisión: OK, cuadros al nuevo destino=0
+Test Case '-[JarvisTests.GlassesMockTests test4_ViewThenLiveKeepsSameCamera]' passed (4.329 seconds).
+Test Case '-[JarvisTests.GlassesMockTests test5_FullQualityPhoto]' started.
+JARVIS-CHECK foto máxima: OK 145613 bytes
+Test Case '-[JarvisTests.GlassesMockTests test5_FullQualityPhoto]' passed (2.336 seconds).
+	 Executed 5 tests, with 0 failures (0 unexpected) in 51.559 (51.575) seconds
+Test Case '-[JarvisTests.LocalVoiceTests testModelLoadsAndSpeaksFast]' started.
+JARVIS-CHECK voz local: origen=jarvis
+JARVIS-CHECK voz local: 2.7 s de audio en 0.56 s
+JARVIS-CHECK voz local: 5.6 s de audio en 1.46 s
+Test Case '-[JarvisTests.LocalVoiceTests testModelLoadsAndSpeaksFast]' passed (9.949 seconds).
+	 Executed 1 test, with 0 failures (0 unexpected) in 9.949 (9.952) seconds
+	 Executed 13 tests, with 0 failures (0 unexpected) in 61.787 (62.995) seconds
+	 Executed 13 tests, with 0 failures (0 unexpected) in 61.787 (62.997) seconds
+** TEST SUCCEEDED **
+== final de pruebas ==
+2026-11-25 23:43:53.784228+0000 Jarvis[18193:57449] [AMCP]          HALC_ProxyIOContext.cpp:1623  HALC_ProxyIOContext::IOWorkLoop: skipping cycle due to overload
+2026-11-25 23:43:56.311072+0000 Jarvis[18193:57449] [AMCP]          HALC_ProxyIOContext.cpp:1623  HALC_ProxyIOContext::IOWorkLoop: skipping cycle due to overload
+2026-11-25 23:43:56.328291+0000 Jarvis[18193:57449] [AMCP]          HALC_ProxyIOContext.cpp:1623  HALC_ProxyIOContext::IOWorkLoop: skipping cycle due to overload
+2026-11-25 23:43:56.330802+0000 Jarvis[18193:57449] [AMCP]          HALC_ProxyIOContext.cpp:1623  HALC_ProxyIOContext::IOWorkLoop: skipping cycle due to overload
+2026-11-25 23:43:57.051266+0000 Jarvis[18193:58584] [] <<< FFR_Common >>> signalled err=-12847 at <>:4019
+JARVIS-CHECK vista→transmisión: OK, cuadros al nuevo destino=0
+2026-11-25 23:44:00.078924+0000 Jarvis[18193:57434] [CoreBluetooth] XPC connection invalid
+Test Case '-[JarvisTests.GlassesMockTests test4_ViewThenLiveKeepsSameCamera]' passed (4.329 seconds).
+Test Case '-[JarvisTests.GlassesMockTests test5_FullQualityPhoto]' started.
+2026-11-25 23:44:00.341754+0000 Jarvis[18193:56701] [CoreBluetooth] API MISUSE: <CBCentralManager: 0x11050cc20> can only accept this command while in the powered on state
+JARVIS-CHECK foto máxima: OK 145613 bytes
+2026-11-25 23:44:02.401277+0000 Jarvis[18193:58569] [CoreBluetooth] XPC connection invalid
+Test Case '-[JarvisTests.GlassesMockTests test5_FullQualityPhoto]' passed (2.336 seconds).
+Test Suite 'GlassesMockTests' passed at 2026-11-25 23:44:02.474.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 51.559 (51.575) seconds
+Test Suite 'LocalVoiceTests' started at 2026-11-25 23:44:02.476.
+Test Case '-[JarvisTests.LocalVoiceTests testModelLoadsAndSpeaksFast]' started.
+JARVIS-CHECK voz local: origen=jarvis
+2026-11-25 23:44:03.084767+0000 Jarvis[18193:57449] [AMCP]          HALC_ProxyIOContext.cpp:1623  HALC_ProxyIOContext::IOWorkLoop: skipping cycle due to overload
+2026-11-25 23:44:03.731580+0000 Jarvis[18193:57449] [AMCP]          HALC_ProxyIOContext.cpp:1623  HALC_ProxyIOContext::IOWorkLoop: skipping cycle due to overload
+2026-11-25 23:44:04.162880+0000 Jarvis[18193:57449] [AMCP]          HALC_ProxyIOContext.cpp:1623  HALC_ProxyIOContext::IOWorkLoop: skipping cycle due to overload
+JARVIS-CHECK voz local: 2.7 s de audio en 0.56 s
+JARVIS-CHECK voz local: 5.6 s de audio en 1.46 s
+Test Case '-[JarvisTests.LocalVoiceTests testModelLoadsAndSpeaksFast]' passed (9.949 seconds).
+Test Suite 'LocalVoiceTests' passed at 2026-11-25 23:44:12.429.
+	 Executed 1 test, with 0 failures (0 unexpected) in 9.949 (9.952) seconds
+Test Suite 'JarvisTests.xctest' passed at 2026-11-25 23:44:12.430.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 61.787 (62.995) seconds
+Test Suite 'All tests' passed at 2026-11-25 23:44:12.430.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 61.787 (62.997) seconds
+2026-11-25 23:44:14.603 xcodebuild[12101:38059] [MT] IDETestOperationsObserverDebug: 447.642 elapsed -- Testing started completed.
+2026-11-25 23:44:14.603 xcodebuild[12101:38059] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-25 23:44:14.603 xcodebuild[12101:38059] [MT] IDETestOperationsObserverDebug: 447.642 sec, +447.642 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/runner/work/jarvis-glasses/jarvis-glasses/ios/build-test/Logs/Test/Test-Jarvis-2026.11.25_23-36-08-+0000.xcresult
+
+** TEST SUCCEEDED **
+
+Testing started
