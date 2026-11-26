@@ -11,6 +11,7 @@ import { live, VIEWER_HTML, EXPIRED_HTML } from './live.js';
 import { usageSnapshot, providers, resolveBrains } from './llm.js';
 import { startReminderLoop } from './reminders.js';
 import { startRoutineLoop } from './routines.js';
+import { startVigia } from './vigia.js';
 import { translateAndSpeak } from './tools.js';
 import { lionEstado, lionAgentes, lionEnabled } from './lion.js';
 
@@ -332,6 +333,7 @@ startReminderLoop();
 await resolveBrains();
 const routineTick = startRoutineLoop((r) => runBackground({ prompt: r.prompt, label: r.label, context: { location: lastLocation } }));
 setTimeout(routineTick, 2000).unref(); // al arrancar, por si toca una ahora mismo
+startVigia();
 server.listen(config.port, () => {
   log(`ENLACE DE CONEXIÓN (ábrelo en el iPhone): ${config.publicUrl || 'https://TU-SERVIDOR'}/setup?t=${config.token}`);
   log(`Jarvis escuchando en :${config.port}  cerebros=${config.mock ? 'MOCK' : providers().map((p) => p.name + ':' + p.label).join(' → ')}  tts=${ttsEnabled()}  whatsapp=${waEnabled()}  tradingview=${!!config.tvSecret}`);

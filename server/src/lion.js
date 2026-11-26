@@ -78,7 +78,7 @@ export function lionEncargar(agente, texto) {
   const aid = String(agente || 'director').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 30) || 'director';
   conversar(aid, `[Mensaje de Leon a través de Jarvis, su asistente por voz] ${texto}`, 300_000)
     .then((r) => {
-      const t = r.texto.replace(/[*_#`>|]/g, '').replace(/\s+/g, ' ').slice(0, 900);
+      const t = r.texto.replace(/[*_#`>|]/g, '').replace(/\s+/g, ' ').slice(0, 1800);
       hub.deliver({ type: 'alert', id, source: 'lion', text: `${r.nombre} de Lion Capital responde: ${t || 'recibido.'}`, priority: 'normal', ts: Date.now() });
     })
     .catch((e) => {
