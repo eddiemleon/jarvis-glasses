@@ -46,5 +46,6 @@ export const copiloto = {
 /** ¿La frase es para salir del modo copiloto? */
 export function esSalida(text) {
   const t = String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (/\b(pasame|regresa(me)?|vuelve|volver)\b.*\bjarvis\b/.test(t)) return true;
   return /\b(sal(ir|te)?|termina(r)?|cierra|apaga|deja|desactiva|fin)\b.*\bcopiloto\b|\bcopiloto\b.*\b(apagado|fuera|off|termina)\b/.test(t);
 }

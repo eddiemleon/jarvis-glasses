@@ -17,6 +17,6 @@ copiloto.responder(id, '**El rojo** va al positivo.');
 assert.equal(recibidos.at(-1).source, 'copiloto');
 assert.equal(recibidos.at(-1).text, 'El rojo va al positivo.');
 // salir del modo
-for (const s of ['salir del copiloto', 'Jarvis, termina el copiloto', 'apaga el copiloto']) assert.ok(esSalida(s), s);
+for (const s of ['salir del copiloto', 'Jarvis, termina el copiloto', 'apaga el copiloto', 'pásame a Jarvis', 'regrésame a Jarvis']) assert.ok(esSalida(s), s);
 for (const s of ['¿qué ves aquí?', 'pregúntale al copiloto qué opina']) assert.ok(!esSalida(s), s);
 console.log('copiloto: 9 comprobaciones OK');
