@@ -12,6 +12,7 @@ import { usageSnapshot, providers, resolveBrains } from './llm.js';
 import { startReminderLoop } from './reminders.js';
 import { startRoutineLoop } from './routines.js';
 import { startVigia } from './vigia.js';
+import { copiloto } from './copiloto.js';
 import { translateAndSpeak } from './tools.js';
 import { lionEstado, lionAgentes, lionEnabled } from './lion.js';
 
@@ -161,6 +162,21 @@ const server = http.createServer(async (req, res) => {
     }
 
     // La PC del usuario avisa dónde está su voz propia (túnel seguro). Cada 5 min.
+    // Copiloto: la PC de Leon recoge mensajes (long-poll) y devuelve la respuesta de su chat único de Claude.
+    if (url.pathname === '/copiloto/next' && req.method === 'GET') {
+      if (!authed(req)) return reply(res, 401, 'unauthorized');
+      const m = await copiloto.siguiente(25_000);
+      if (!m) { res.writeHead(204); return res.end(); }
+      return reply(res, 200, JSON.stringify(m), 'application/json');
+    }
+    if (url.pathname === '/copiloto/reply' && req.method === 'POST') {
+      if (!authed(req)) return reply(res, 401, 'unauthorized');
+      let b = null;
+      try { b = JSON.parse((await readBody(req, 200_000)).toString('utf8') || '{}'); } catch {}
+      if (!b || !b.texto) return reply(res, 400, 'texto requerido');
+      copiloto.responder(String(b.id || ''), String(b.texto));
+      return reply(res, 200, JSON.stringify({ ok: true }), 'application/json');
+    }
     if (url.pathname === '/lion/register' && req.method === 'POST') {
       if (!authed(req)) return reply(res, 401, 'unauthorized');
       let b = null;

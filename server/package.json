@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node test/smoke.mjs && node test/live-fallback.mjs && node test/brain-order.mjs && node test/auto-brain.mjs && node test/features.mjs && node test/welcome.mjs && node test/persist.mjs && node test/voice.mjs && node test/voice-slow.mjs && node test/lion.mjs && node test/vigia.mjs"
+    "test": "node test/smoke.mjs && node test/live-fallback.mjs && node test/brain-order.mjs && node test/auto-brain.mjs && node test/features.mjs && node test/welcome.mjs && node test/persist.mjs && node test/voice.mjs && node test/voice-slow.mjs && node test/lion.mjs && node test/vigia.mjs && node test/copiloto.mjs"
   },
   "engines": {
     "node": ">=20"

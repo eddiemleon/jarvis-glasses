@@ -1,3 +1,4 @@
+import { copiloto, esSalida } from './copiloto.js';
 import crypto from 'node:crypto';
 import { config, log } from './config.js';
 import { hub } from './hub.js';
@@ -243,6 +244,21 @@ export async function runTurn({ id, text, context }) {
   speaker.onFirst = () => { timing.say ??= Date.now(); };
 
   try {
+    // Modo copiloto: lo que dice Leon va directo (con foto de las gafas) a su chat único de Claude en la PC.
+    if (copiloto.activo && !context?.retried) {
+      if (esSalida(text)) {
+        copiloto.activo = false;
+        speaker.push('Salimos del copiloto, señor. ');
+      } else {
+        let img = null;
+        try { img = await hub.requestCapture(4000, ac.signal); } catch {}
+        copiloto.enviar(text, img);
+        speaker.push(copiloto.pcConectada ? 'Enviado. ' : 'Guardado; la PC del copiloto no está conectada. ');
+      }
+      speaker.end();
+      hub.send({ type: 'done', id });
+      return;
+    }
     if (config.mock) {
       await mockTurn(text, speaker, ctx);
       history = trimHistory(msgs);

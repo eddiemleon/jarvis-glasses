@@ -1,5 +1,6 @@
 export const JUNTA_PROMPT = 'Junta diaria para Leon (se la leerá Jarvis en voz alta por las gafas): en máximo 250 palabras, sin tablas ni viñetas, en frases habladas: 1) cómo va la cuenta y el reto, 2) qué hicieron los agentes y la fábrica desde la última junta, 3) estrategias en prueba y su estado, 4) riesgos que ven, 5) qué recomiendan. Solo informe y análisis: no cambies nada del proyecto.';
 import crypto from 'node:crypto';
+import { copiloto } from './copiloto.js';
 import { config, log } from './config.js';
 import { hub } from './hub.js';
 import { store } from './store.js';
@@ -211,6 +212,8 @@ export function toolDefs() {
       description: 'Pasa una pregunta o un encargo a un agente de Lion Capital (por defecto el Director, que coordina la sala, la fábrica de estrategias y el laboratorio). Úsala para delegar tareas, preguntar por el proyecto (fábrica, estrategias, noticias, fase del reto) y cuando Leon diga "pregúntale a Claude": los agentes responden con Claude (su suscripción) y pueden leer los archivos del proyecto. La respuesta tarda: dile a Leon que se lo pasaste y que le avisarás cuando responda.',
       input_schema: { type: 'object', properties: { agente: { type: 'string', description: 'id del agente, por defecto director' }, texto: { type: 'string' } }, required: ['texto'] },
     },
+    { name: 'copiloto_start', description: 'Activa el modo copiloto: desde ahora TODO lo que Leon diga (con una foto de lo que ven las gafas) va directo a su chat único de Claude en la PC, y la respuesta se le lee en voz alta. Para "modo copiloto", "conéctame con mi Claude", "habla con el copiloto".', input_schema: { type: 'object', properties: {} } },
+    { name: 'copiloto_stop', description: 'Sale del modo copiloto y vuelve a la conversación normal con Jarvis.', input_schema: { type: 'object', properties: {} } },
     { name: 'lion_junta', description: 'Junta diaria con la sala de Lion Capital: el Director reúne lo que saben los agentes y da un informe hablado de unos 2 minutos (resultados, estrategias en prueba, riesgos y recomendaciones). Llega solo como aviso de voz.', input_schema: { type: 'object', properties: {} } },
     { name: 'lion_agentes', description: 'Lista los agentes de Lion Capital (id, nombre, rol) para saber a quién delegar.', input_schema: { type: 'object', properties: {} } },
   ];
@@ -446,6 +449,14 @@ export async function runTool(name, input, ctx) {
         const a = lionEncargar(input.agente, String(input.texto || ''));
         return { content: `Encargo enviado a "${a}" de Lion Capital. La respuesta llegará sola como aviso de voz.` };
       }
+      case 'copiloto_start':
+        copiloto.activo = true;
+        return { content: copiloto.pcConectada
+          ? 'Modo copiloto activo: lo que Leon diga va a su chat de Claude en la PC con una foto de las gafas. Dile que hable normal y que para salir diga "salir del copiloto".'
+          : 'Modo copiloto activo, PERO la PC no está conectada (falta abrir INICIAR_COPILOTO.bat en la PC). Los mensajes esperarán hasta que la PC se conecte. Díselo.' };
+      case 'copiloto_stop':
+        copiloto.activo = false;
+        return { content: 'Modo copiloto desactivado.' };
       case 'lion_junta': {
         if (!lionEnabled()) return { content: 'Lion Capital aún no está conectado a Jarvis.', is_error: true };
         lionEncargar('director', JUNTA_PROMPT);
