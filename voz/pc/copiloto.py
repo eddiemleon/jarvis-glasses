@@ -51,6 +51,8 @@ def preguntar(texto, foto):
     sid = SESION.read_text().strip() if SESION.exists() else ""
     if sid:
         cmd += ["--resume", sid]
+    else:  # primer mensaje: así el chat aparece en la PC con el nombre "JARVIS Claude"
+        cmd[2] = "JARVIS Claude — chat único de Leon por las gafas.\n\n" + cmd[2]
     r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=600, cwd=str(DIR),
                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     try:
